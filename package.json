@@ -1,6 +1,6 @@
 {
   "name": "abuseguard",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Traffic referee reference core: per-human cost budgets, explainable verdicts, log audit.",
   "type": "module",
   "license": "UNLICENSED",

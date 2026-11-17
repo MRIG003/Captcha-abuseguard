@@ -3,6 +3,7 @@
 import { DEFAULT_CONFIG, SPEC_VERSION, score } from './scoring.js';
 
 const LADDER = ['email_confirm', 'passkey', 'card_on_file', 'human_check', 'manual_review'];
+const STRONG = ['card_on_file', 'human_check', 'manual_review'];
 const PATHS = {
   slow: ['identify_client', 'request_api_access'],
   limit: ['wait_for_reset', 'add_payment_method', 'upgrade_plan'],
@@ -10,13 +11,16 @@ const PATHS = {
 };
 
 /** Next unsatisfied rung. `manual_review` is always last, so a non-visual, non-gesture path always exists. */
-function stepUp(b, sig, strong) {
+function stepUp(b, sig, strong, order) {
   const done = {
     email_confirm: !!b.email_confirmed, passkey: !!b.passkey,
     card_on_file: !!b.card_on_file && (b.payment_cluster ?? 0) < 3,
     human_check: sig['human.liveness']?.value === 'pass',
   };
-  const open = LADDER.slice(strong ? 2 : 0).filter((rung) => !done[rung]);
+  // A tenant may reorder or drop rungs; manual_review is always kept last so a way through always exists.
+  const ladder = Array.isArray(order) && order.length ? [...order.filter((r) => r !== 'manual_review'), 'manual_review'] : LADDER;
+  const from = strong ? ladder.filter((r) => STRONG.includes(r) || !LADDER.includes(r)) : ladder;
+  const open = from.filter((rung) => !done[rung]);
   return { type: 'step_up', step: open[0], alternatives: open.slice(1) };
 }
 const special = (step) => ({ type: 'step_up', step, alternatives: ['manual_review'] });
@@ -35,7 +39,7 @@ export function decide(input, config = DEFAULT_CONFIG) {
   if (degraded) reasons.push('PROVIDER_DEGRADED');
   if (!(input.signals ?? []).length) reasons.push('NO_EXTERNAL_SIGNALS');
 
-  const over = s.costRatio >= 1;
+  const over = s.costRatio >= 1, order = input.policy?.step_up_order;
   const bot = sig['bot.verified'], assist = sig['assistive.tool'], cred = sig['agent.credential'];
   const botOk = !!bot && bot.confidence >= 0.8;
   const credOk = !!cred && cred.value?.verified === true && cred.confidence >= 0.8;
@@ -73,9 +77,9 @@ export function decide(input, config = DEFAULT_CONFIG) {
   if (!r) {
     const flags = [...(unverifiedAgent ? ['AGENT_UNVERIFIED'] : []), ...(assist ? ['ASSISTIVE_DECLARED'] : [])];
     if (s.farm >= cfg.farmStepUp) {
-      r = !s.strongLink ? v('inconclusive', 'step_up', s.farm, flags, stepUp(b, sig, false))
+      r = !s.strongLink ? v('inconclusive', 'step_up', s.farm, flags, stepUp(b, sig, false, order))
         : s.farm >= cfg.farmBlock && !degraded ? v('likely_farm', 'block', s.farm, flags)
-          : v('likely_farm', 'step_up', s.farm, flags, stepUp(b, sig, true));
+          : v('likely_farm', 'step_up', s.farm, flags, stepUp(b, sig, true, order));
     } else if (input.subject?.kind === 'api_key' && (b.key_fanout ?? 0) >= cfg.fanoutReseller) {
       r = v('reseller', paying ? 'allow' : 'limit', 0.6, [...flags, 'KEY_FANOUT'], paying ? null : limit);
     } else if (s.scraper >= cfg.scraperSlow) {
@@ -96,8 +100,19 @@ export function decide(input, config = DEFAULT_CONFIG) {
     }
   }
 
-  const decision = r.decision;
-  const action = r.action ?? (decision === 'block' ? { type: 'block', status: 403 } : null);
+  // Standing and tenant settings adjust the action after classification; the class and scores stay as computed.
+  let decision = r.decision, act = r.action;
+  const st = input.standing ?? {}, allowed = input.policy?.allowed_actions, adjust = [];
+  const pow = { type: 'step_up', step: 'proof_of_work', alternatives: ['email_confirm', 'manual_review'] };
+  if (st.trusted && ['block', 'step_up', 'slow'].includes(decision) && r.cls !== 'delegated_agent') { decision = 'allow'; act = null; adjust.push('OPERATOR_TRUSTED'); }
+  if (st.appeal_open && decision === 'block') { decision = 'step_up'; act = stepUp(b, sig, true, order); adjust.push('APPEAL_OPEN'); }
+  if (Array.isArray(allowed) && decision !== 'allow' && !allowed.includes(decision)) {
+    adjust.push('ACTION_NOT_PERMITTED');
+    const viaStepUp = (decision === 'block' || decision === 'slow') && allowed.includes('step_up');
+    act = viaStepUp ? (decision === 'block' ? stepUp(b, sig, true, order) : pow) : null;
+    decision = viaStepUp ? 'step_up' : 'allow';
+  }
+  const action = act ?? (decision === 'block' ? { type: 'block', status: 403 } : null);
   const enforced = (input.mode ?? cfg.mode) === 'enforce';
   const stepPaths = action?.type === 'step_up' ? [action.step, ...action.alternatives] : [];
   return {
@@ -108,12 +123,12 @@ export function decide(input, config = DEFAULT_CONFIG) {
     enforced,
     effective_decision: enforced ? decision : 'allow',
     confidence: Math.round((degraded ? Math.min(r.confidence, 0.7) : r.confidence) * 100) / 100,
-    reasons: [...new Set([...r.why, ...reasons])],
+    reasons: [...new Set([...r.why, ...adjust, ...reasons])],
     scores: { farm: s.farm, scraper: s.scraper, legit: s.legit, cost_ratio: s.costRatio },
     action,
     recovery: decision === 'allow' ? null : {
       appeal: true,
-      paths: [...new Set([...r.paths, ...stepPaths, ...(PATHS[decision] ?? []), 'appeal'])],
+      paths: [...new Set([...(decision === r.decision ? r.paths : []), ...stepPaths, ...(PATHS[decision] ?? []), 'appeal'])],
       sla_hours: cfg.appealSlaHours,
     },
     cost: { attributed_usd: s.costUsd, budget_usd: s.budgetUsd },

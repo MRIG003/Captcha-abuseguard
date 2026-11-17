@@ -64,4 +64,4 @@ jobs:
           check docs/AGENT-LANE.md 500
           check docs/MANUAL-OUTLINE.md 600
           check docs/ANALYSIS.md 1200
-          lines=$(cat src/*.js src/store/*.js | wc -l); echo "src lines: $lines"; [ "$lines" -le 720 ]
+          lines=$(cat src/*.js src/store/*.js | wc -l); echo "src lines: $lines"; [ "$lines" -le 780 ]

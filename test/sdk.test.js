@@ -49,7 +49,7 @@ test('toHttp maps enforced verdicts and leaves shadow verdicts alone', () => {
   assert.equal(toHttp(v('allow', null)), null);
   assert.equal(toHttp({ error: {}, status: 400 }), null);
   assert.deepEqual([toHttp(v('limit', { retry_after_s: 86400 })).status, toHttp(v('limit', { retry_after_s: 86400 })).headers['retry-after']], [429, '86400']);
-  assert.equal(toHttp(v('slow', { mode: 'cached' })).status, 304);
+  assert.equal(toHttp(v('slow', { mode: 'cached', retry_after_s: 2 })).status, 429);
   assert.equal(toHttp(v('slow', { mode: 'rate_budget', retry_after_s: 2 })).status, 429);
   assert.equal(toHttp(v('step_up', { step: 'email_confirm' })).status, 403);
   assert.equal(toHttp(v('block', { type: 'block' })).status, 403);

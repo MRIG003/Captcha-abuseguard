@@ -67,7 +67,7 @@ export function analyzeLines(lines, opts = {}) {
     let s = subs.get(id);
     if (!s) {
       s = { kind: e.key ? 'api_key' : 'session', id, ua: uaClass(e.ua), verified: opts.verifyBot?.(e.ip, e.ua) ?? null,
-        requests: 0, bytes: 0, cost: 0, minutes: new Map(), seen: new Set(), repeats: 0, robots: 0, converted: false, rpm: 0 };
+        requests: 0, bytes: 0, cost: 0, minutes: new Map(), seen: new Set(), repeats: 0, robots: 0, errors: 0, converted: false, rpm: 0 };
       subs.set(id, s);
     }
     s.requests++; s.bytes += e.bytes;
@@ -78,6 +78,7 @@ export function analyzeLines(lines, opts = {}) {
     const seenKey = `${e.path}|${e.bytes}`;
     if (e.status === 304 || s.seen.has(seenKey)) s.repeats++; else s.seen.add(seenKey);
     if (disallow.some((p) => e.path.startsWith(p))) s.robots++;
+    if (e.status >= 400 && e.status !== 401 && e.status !== 429) s.errors++; // 401 and 429 are our own or auth replies
     if (convertedPaths.some((p) => e.path.startsWith(p))) s.converted = true;
   }
 
@@ -91,7 +92,8 @@ export function analyzeLines(lines, opts = {}) {
     const verdict = decide({
       subject: { kind: s.kind, id: s.id }, mode: 'shadow',
       context: { surface: s.kind === 'api_key' ? 'api' : 'content' },
-      behavior: { rpm: s.rpm, robots_violations: s.robots, refetch_unchanged: s.requests >= 20 ? s.repeats / s.requests : 0, ua: s.ua },
+      behavior: { rpm: s.rpm, robots_violations: s.robots, refetch_unchanged: s.requests >= 20 ? s.repeats / s.requests : 0,
+        error_ratio: s.requests >= 20 ? s.errors / s.requests : 0, ua: s.ua },
       signals: s.verified ? [{ type: 'bot.verified', value: s.verified, confidence: 0.95, freshness_s: 0, provenance: 'log_audit.verify_bot' }] : [],
       cost: { usd: s.cost, budget_usd: cfg.budgetUsd },
     }, cfg);

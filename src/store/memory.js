@@ -69,6 +69,7 @@ export function createMemoryStore(now = () => Date.now()) {
       const row = appeals.get(appealId);
       if (!row || row.tenant !== tenant) throw new Error('appeal not found');
       Object.assign(row, { status: 'resolved', outcome, resolved_at: now() });
+      return row.decision_id;
     },
     async saveOutcome(tenant, decisionId, label) {
       if (decisions.get(decisionId)?.tenant !== tenant) throw new Error('decision not found');

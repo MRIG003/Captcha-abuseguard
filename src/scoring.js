@@ -2,7 +2,7 @@
 /** Scoring core: config, signal normalisation, evidence scores, cost attribution. Zero dependencies. */
 import { createHmac } from 'node:crypto';
 
-export const SPEC_VERSION = '1.0.0';
+export const SPEC_VERSION = '1.1.0';
 export const CLASSES = ['likely_farm', 'legitimate_heavy_user', 'legitimate_user', 'reseller', 'delegated_agent',
   'assistive_tool', 'search_engine', 'declared_crawler', 'suspected_scraper', 'inconclusive'];
 export const DECISIONS = ['allow', 'step_up', 'slow', 'limit', 'block'];
@@ -25,6 +25,7 @@ export function loadConfig(env = {}, overrides = {}) {
     minSignalConfidence: num(env, 'AG_SIGNAL_MIN_CONFIDENCE', 0.3),
     rpmHigh: num(env, 'AG_RPM_HIGH', 120),
     rpmVeryHigh: num(env, 'AG_RPM_VERY_HIGH', 600),
+    errorRatio: num(env, 'AG_ERROR_RATIO', 0.1),
     fanoutReseller: num(env, 'AG_KEY_FANOUT', 25),
     agentRpm: num(env, 'AG_AGENT_RPM', 60),
     crawlerRpm: num(env, 'AG_CRAWLER_RPM', 60),
@@ -99,6 +100,8 @@ export function score(input, cfg = DEFAULT_CONFIG) {
     scraper += add(rpm >= cfg.rpmHigh, 'HIGH_REQUEST_RATE', rpm >= cfg.rpmVeryHigh ? 0.5 : 0.3);
     scraper += add((b.robots_violations ?? 0) > 0, 'ROBOTS_VIOLATION', 0.3);
     scraper += add((b.refetch_unchanged ?? 0) >= 0.5, 'UNCHANGED_REFETCH', 0.2);
+    // Fast and failing: probing for pages that do not exist. Counted only together with a high request rate.
+    scraper += add(rpm >= cfg.rpmHigh && (b.error_ratio ?? 0) >= cfg.errorRatio, 'ERROR_RESPONSE_RATIO', 0.2);
     scraper += add(!!proxy, 'PROXY_NETWORK', (proxy?.value === 'residential' ? 0.2 : 0.15) * (proxy?.confidence ?? 0));
     scraper += add(b.ua === 'library' || b.ua === 'empty', 'NON_BROWSER_CLIENT', 0.1);
     scraper = clamp(scraper - 0.5 * legit);

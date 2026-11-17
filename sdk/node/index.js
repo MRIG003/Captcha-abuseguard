@@ -5,7 +5,7 @@
  */
 import { createHmac } from 'node:crypto';
 
-const SPEC_VERSION = '1.0.0';
+const SPEC_VERSION = '1.1.0';
 
 /** Same output as the core `hashId`: first 32 hex chars of HMAC-SHA256(salt, raw). */
 export const hashId = (salt, raw) => createHmac('sha256', String(salt)).update(String(raw)).digest('hex').slice(0, 32);
@@ -50,7 +50,6 @@ export function toHttp(verdict) {
   if (!verdict || verdict.error || !verdict.enforced || verdict.decision === 'allow') return null;
   const body = { decision: verdict.decision, decision_id: verdict.decision_id, reasons: verdict.reasons, action: verdict.action, recovery: verdict.recovery };
   const retry = verdict.action?.retry_after_s ? { 'retry-after': String(Math.ceil(verdict.action.retry_after_s)) } : {};
-  if (verdict.decision === 'slow' && verdict.action?.mode === 'cached') return { status: 304, headers: {}, body: null };
   if (verdict.decision === 'slow' || verdict.decision === 'limit') return { status: 429, headers: retry, body };
   return { status: 403, headers: {}, body }; // step_up and block: the body tells the client what to do next
 }
@@ -62,6 +61,29 @@ export function createClient(options) {
   const { baseUrl, apiKey, salt, timeoutMs = 150, failMode = 'open', flushMs = 2000 } = options;
   if (!baseUrl || !apiKey || !salt) throw new TypeError('createClient needs baseUrl, apiKey and salt');
   let queue = [], timer = null;
+  const buckets = new Map();
+
+  /** Token bucket for the `slow` action: `rpm` requests a minute with a 10-second burst. True = let it through. */
+  function takeToken(key, rpm, nowMs = Date.now()) {
+    const capacity = Math.max(1, rpm / 6), b = buckets.get(key) ?? { tokens: capacity, at: nowMs };
+    b.tokens = Math.min(capacity, b.tokens + ((nowMs - b.at) / 60000) * rpm); b.at = nowMs;
+    const ok = b.tokens >= 1;
+    if (ok) b.tokens -= 1;
+    if (buckets.size > 20000) buckets.clear();
+    buckets.set(key, b);
+    return ok;
+  }
+
+  /** Report a completed (or failed) step-up so the next decision can move on. Never throws. */
+  async function verify(subj, step, result = 'pass') {
+    try {
+      const res = await fetch(`${baseUrl}/v1/subjects/${subj.kind}/${encodeURIComponent(subj.id)}/verifications`, {
+        method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ step, result }), signal: AbortSignal.timeout(5000),
+      });
+      return res.ok;
+    } catch { return false; }
+  }
   const hash = (raw) => hashId(salt, raw);
   const subject = (kind, rawId) => ({ kind, id: hash(rawId) });
 
@@ -86,9 +108,13 @@ export function createClient(options) {
 
   /**
    * Connect/Express-style middleware. `identify(req)` returns `{subject, context?, behavior?, signals?}` or null
-   * to skip. In shadow mode it only sets the `AG-Decision` header.
+   * to skip. In shadow mode it only sets the `AG-Decision` header. Enforced actions:
+   *   limit   -> 429 with Retry-After until the allowance resets
+   *   slow    -> requests within the rate budget pass, the rest get 429; `cached` answers 304 to conditional requests
+   *   step_up -> `hooks.onStepUp(req, res, verdict)` if given (render your own check), else 403 with the steps
+   *   block   -> 403 with the recovery paths
    */
-  function middleware(identify) {
+  function middleware(identify, hooks = {}) {
     return async (req, res, next) => {
       let verdict = null;
       try {
@@ -99,6 +125,13 @@ export function createClient(options) {
         req.abuseguard = verdict;
         res.setHeader('AG-Decision', `${verdict.decision}; class=${verdict.class}; enforced=${verdict.enforced}`);
       }
+      if (verdict?.enforced && verdict.decision === 'slow') {
+        const conditional = req.headers?.['if-none-match'] || req.headers?.['if-modified-since'];
+        if (verdict.action.mode === 'cached' && conditional) { res.statusCode = 304; return res.end(); }
+        const key = `${verdict.subject?.kind}:${verdict.subject?.id}`;
+        if (verdict.action.mode !== 'retry_after' && takeToken(key, verdict.action.rpm ?? 30)) return next();
+      }
+      if (verdict?.enforced && verdict.decision === 'step_up' && hooks.onStepUp) return hooks.onStepUp(req, res, verdict);
       const out = toHttp(verdict);
       if (!out) return next();
       res.statusCode = out.status;
@@ -109,7 +142,7 @@ export function createClient(options) {
   }
 
   return {
-    hash, subject, track, flush, middleware,
+    hash, subject, track, flush, middleware, verify, takeToken,
     assess: (input, opts = {}) => assess(baseUrl, input, { timeoutMs, failMode, apiKey, ...opts }),
   };
 }

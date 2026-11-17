@@ -16,8 +16,12 @@ Ordered. Each task is sized for one session of a mid-tier model. Read `CONTEXT.m
 |T08|CLI done (`scripts/audit.js`)|Streaming, gzip, CDN field mappings, rotating-client clustering|
 |T06, T07, T09-T15|Not started|Everything|
 
-Validation on public data is in `docs/VALIDATION.md`. Open follow-ups from it: an error-ratio signal for scanners (needs
-review: changes scoring), and the blocked datasets (labelled farms, labelled bot logs) once their hosts are reachable.
+Third round (same day): error-ratio signal (spec 1.1.0), the action layer and settings/presets are built (`docs/ACTIONS.md`).
+Open from it: enforcement in other SDKs and at the edge, a shared rate budget (Redis or the store), stored webhook
+deliveries with replay, a real live check behind the `human_check` rung, `charge` and `ask to log in` actions,
+and tuning preset numbers with a customer.
+
+Validation on public data is in `docs/VALIDATION.md`. Open follow-up: the blocked datasets (labelled farms, labelled bot logs) once their hosts are reachable.
 
 Known gaps in what was built:
 

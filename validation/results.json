@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17T06:38:07.962Z",
+  "generated_at": "2026-11-17T07:06:03.495Z",
   "engine_defaults": {
     "rpmHigh": 120,
     "scraperSlow": 0.6,
@@ -44,7 +44,7 @@
       "from": "2015-05-17T08:05:00.000Z",
       "to": "2015-06-04T07:06:52.000Z"
     },
-    "analyse_ms": 263,
+    "analyse_ms": 256,
     "by_class": {
       "legitimate_user": {
         "subjects": 2499,
@@ -114,13 +114,14 @@
         "error_status_pct": 14.96,
         "subjects_detail": [
           {
-            "class": "inconclusive",
-            "decision": "step_up",
+            "class": "suspected_scraper",
+            "decision": "slow",
             "requests": 6530,
             "peak_rpm": 414,
             "reasons": [
               "HIGH_REQUEST_RATE",
               "UNCHANGED_REFETCH",
+              "ERROR_RESPONSE_RATIO",
               "NO_EXTERNAL_SIGNALS"
             ]
           },
@@ -153,12 +154,13 @@
         "error_status_pct": 35.82,
         "subjects_detail": [
           {
-            "class": "inconclusive",
-            "decision": "step_up",
+            "class": "suspected_scraper",
+            "decision": "slow",
             "requests": 7090,
             "peak_rpm": 2833,
             "reasons": [
               "HIGH_REQUEST_RATE",
+              "ERROR_RESPONSE_RATIO",
               "NO_EXTERNAL_SIGNALS"
             ]
           },
@@ -190,8 +192,8 @@
             "reasons": [
               "HIGH_REQUEST_RATE",
               "UNCHANGED_REFETCH",
-              "NON_BROWSER_CLIENT",
-              "NO_EXTERNAL_SIGNALS"
+              "ERROR_RESPONSE_RATIO",
+              "NON_BROWSER_CLIENT"
             ]
           },
           {

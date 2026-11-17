@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: abuseguard API
-  version: 1.0.0
+  version: 1.1.0
   summary: Traffic referee. Per-human cost budgets, explainable verdicts, governed agent lane, log audit.
   description: |
     Versioning: the path carries the major version (/v1). Every response carries `AG-Spec-Version`
@@ -107,6 +107,25 @@ paths:
       summary: Erasure request (GDPR art. 17, CCPA, DPDP). Removes the subject, links, usage, signals and decisions.
       responses:
         '204': { description: Erased }
+  /v1/subjects/{kind}/{id}/verifications:
+    post:
+      tags: [decisions]
+      operationId: reportVerification
+      summary: Report that a step-up was completed or failed. A pass updates the subject so the next decision moves on.
+      parameters:
+        - { name: kind, in: path, required: true, schema: { $ref: '#/components/schemas/SubjectKind' } }
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [step, result], properties: { step: { enum: [email_confirm, passkey, card_on_file, human_check, proof_of_work, manual_review] }, result: { enum: [pass, fail] } } } } } }
+      responses:
+        '200': { description: Recorded, content: { application/json: { schema: { type: object, properties: { subject: { $ref: '#/components/schemas/Subject' }, step: { type: string }, result: { type: string } } } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+  /v1/presets:
+    get:
+      tags: [decisions]
+      operationId: listPresets
+      summary: Ready-made policies by business type.
+      responses:
+        '200': { description: Presets keyed by name, content: { application/json: { schema: { type: object, additionalProperties: { $ref: '#/components/schemas/Policy' } } } } }
   /v1/signals:
     post:
       tags: [signals]
@@ -305,6 +324,7 @@ components:
         rpm: { type: number, description: Peak requests per minute. }
         robots_violations: { type: integer }
         refetch_unchanged: { type: number, minimum: 0, maximum: 1 }
+        error_ratio: { type: number, minimum: 0, maximum: 1, description: Share of responses with status 400 or above, excluding 401 and 429. }
         key_fanout: { type: integer, description: Distinct client networks using one API key. }
         ua: { enum: [browser, library, declared_bot, declared_agent, empty] }
     Cost:
@@ -341,6 +361,8 @@ components:
         providers: { type: object, additionalProperties: { enum: [ok, timeout, down] }, description: Health of each configured provider for this request. }
         cost: { $ref: '#/components/schemas/Cost' }
         agent_policy: { $ref: '#/components/schemas/AgentPolicy' }
+        standing: { type: object, description: Normally filled by the service from the subject record., properties: { trusted: { type: boolean }, appeal_open: { type: boolean } } }
+        policy: { type: object, description: Normally filled by the service from the tenant policy., properties: { allowed_actions: { type: array, items: { enum: [step_up, slow, limit, block] } }, step_up_order: { type: array, items: { type: string } } } }
     Action:
       type: object
       required: [type]
@@ -409,7 +431,7 @@ components:
         type: { enum: [usage, link, signup, conversion] }
         subject: { $ref: '#/components/schemas/Subject' }
         ts: { type: string, format: date-time }
-        usage: { type: object, properties: { requests: { type: integer }, cpu_s: { type: number }, bytes: { type: integer }, db_s: { type: number }, direct_usd: { type: number }, endpoint: { type: string } } }
+        usage: { type: object, properties: { amount: { type: number, description: Fair-share units that are not dollars. }, requests: { type: integer }, cpu_s: { type: number }, bytes: { type: integer }, db_s: { type: number }, direct_usd: { type: number }, endpoint: { type: string } } }
         link: { type: object, required: [link_type, value_hash], properties: { link_type: { enum: [device, payment, ip, email_domain] }, value_hash: { type: string } } }
     SubjectState:
       type: object
@@ -431,6 +453,11 @@ components:
     Policy:
       type: object
       properties:
+        preset: { enum: [ai_app, online_store, ticketing, publisher, rewards_app], description: Starting values; other fields override it. }
+        strictness: { enum: [watch, gentle, strict], description: 'watch records only; gentle enforces but never blocks; strict enforces everything.' }
+        allowed_actions: { type: array, items: { enum: [step_up, slow, limit, block] } }
+        step_up_order: { type: array, items: { type: string } }
+        unit: { type: string, default: usd, description: 'What the fair share counts: usd, items, tickets, pages, bonuses.' }
         mode: { enum: [shadow, enforce], default: shadow }
         budget_usd: { type: number }
         window_s: { type: integer }
@@ -494,7 +521,7 @@ components:
         cost_attributed_usd: { type: number }
         saved_usd: { type: number }
         good_traffic_converted: { type: integer }
-    WebhookEventType: { enum: [decision.created, subject.flagged, appeal.filed, appeal.resolved, budget.threshold, audit.completed] }
+    WebhookEventType: { enum: [subject.flagged, appeal.filed, appeal.resolved] }
     WebhookEvent:
       type: object
       required: [id, type, created_at, data]

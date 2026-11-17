@@ -24,13 +24,13 @@ Team assumption: 2 engineers, 3 months to MVP.
 
 | Area | State |
 |------|-------|
-| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 720 lines) |
+| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 746 lines) |
 | Postgres store adapter | Passes the adapter contract on a live PostgreSQL 16 (`test/store.pg.test.js`) |
 | HTTP service | Built, tested (`service/app.js`, `test/service.test.js`); also smoke-tested on Postgres |
 | Node SDK | Built (`sdk/node/`); passes the conformance suite as `AG_CONFORMANCE_CLIENT` |
 | Audit CLI | Built (`scripts/audit.js`) |
 | Dockerfile, compose | Written, **never built or run** |
-| Golden vectors | 60, all passing (`contracts/golden-vectors.json`) |
+| Golden vectors | 69, all passing (`contracts/golden-vectors.json`) |
 | Proof tests | 8, passing on synthetic data (`test/proof.test.js`) |
 | Conformance suite | 7 tests against a mock server and reference client (`test/conformance/`) |
 | Edge adapters, signal and credential adapters, webhooks, other SDKs | Not built: `docs/BACKLOG.md` |
@@ -48,6 +48,7 @@ Team assumption: 2 engineers, 3 months to MVP.
 | `docs/BACKLOG.md` | Ordered tasks T00-T15 |
 | `docs/MANUAL-OUTLINE.md` | Outline of user documentation |
 | `docs/ANALYSIS.md` | Substitutes, risks, market size, kill criteria |
+| `docs/ACTIONS.md` | What happens after a flag, settings, presets (`service/presets.js`) |
 | `docs/VALIDATION.md` | Results on public datasets (`validation/run.js`), and what could not be validated |
 | `contracts/` | `openapi.yaml`, `schema.sql`, `golden-vectors.json`, `CONFORMANCE.md` |
 | `src/` | Reference core. `index.js` is the only public entry |
@@ -89,7 +90,7 @@ used only by the Postgres adapter.
 
 - Plain ES modules with JSDoc types (`// @ts-check`); no build step, no TypeScript-only syntax.
 - Zero runtime dependencies in `src/`. Tests use `node:test` and built-ins only.
-- `src/` holds only the scoring core, engine, explainer, log analyzer and store adapters, capped at 720 lines
+- `src/` holds only the scoring core, engine, explainer, log analyzer and store adapters, capped at 780 lines
   (CI). The service, SDKs and adapters live in their own top-level directories and never contain scoring logic.
 - Shared test helpers live in `test/helpers.js`; test files never import each other.
 - The engine is pure: no I/O, no clock, no randomness. Same input and config give the same verdict.
@@ -131,7 +132,8 @@ used only by the Postgres adapter.
 
 - "Better" on cluster budgets holds only as one integrated product; appeals and log audit rest on one page read per vendor.
 - Accuracy numbers are from invented synthetic populations, plus the limited public-data results in VALIDATION.md.
-- The engine ignores response status; scanners with a browser-like user-agent reach only `inconclusive` (VALIDATION.md E3).
+- Enforcement after a flag exists only in the Node SDK; the rate budget is per process (ACTIONS.md, limits).
+- Customers are fitted with settings and presets, never with code written for one customer.
 - Linking quality bounds the product; farms with no shared device, card or provider signal look like separate users.
 - The assistive declaration is self-asserted.
 - An in-house SQL job can reproduce the core idea for a team that already stores device identifiers.

@@ -76,8 +76,9 @@ export function createPostgresStore(pool) {
     },
     async resolveAppeal(tenant, appealId, outcome) {
       const rows = await q(`UPDATE appeals SET status = 'resolved', outcome = $3, resolved_at = now()
-        WHERE tenant_id = $1 AND id = $2 RETURNING id`, [tenant, appealId, outcome]);
+        WHERE tenant_id = $1 AND id = $2 RETURNING decision_id`, [tenant, appealId, outcome]);
       if (!rows.length) throw new Error('appeal not found');
+      return rows[0].decision_id;
     },
     async saveOutcome(tenant, decisionId, label) {
       const rows = await q(`INSERT INTO outcomes (tenant_id, decision_id, label) SELECT $1, d.id, $3 FROM decisions d

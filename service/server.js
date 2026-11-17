@@ -26,7 +26,8 @@ if (!env.AG_API_KEYS) {
   process.exit(1);
 }
 const store = await makeStore();
-const server = createServer(createApp({ store, config: loadConfig(env), apiKeys: env.AG_API_KEYS }));
+const app = createApp({ store, config: loadConfig(env), apiKeys: env.AG_API_KEYS, allowPrivateWebhooks: env.AG_WEBHOOK_ALLOW_PRIVATE === '1' });
+const server = createServer(app);
 server.requestTimeout = 30_000;
 server.headersTimeout = 10_000;
 const port = Number(env.PORT ?? 8787);
@@ -35,7 +36,7 @@ server.listen(port, env.HOST ?? '0.0.0.0', () => log('info', 'abuseguard listeni
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
     log('info', 'shutting down', { signal });
-    server.close(async () => { await store.close(); process.exit(0); });
+    server.close(async () => { await app.drain(); await store.close(); process.exit(0); });
     setTimeout(() => process.exit(1), 10_000).unref();
   });
 }

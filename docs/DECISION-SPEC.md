@@ -1,6 +1,6 @@
-# Decision spec 1.0.0
+# Decision spec 1.1.0
 
-Normative together with `contracts/golden-vectors.json` (60 vectors). Where prose and vectors disagree, vectors win. Reference: `src/scoring.js`, `src/engine.js`. Request and response shapes: `contracts/openapi.yaml`.
+Normative together with `contracts/golden-vectors.json` (69 vectors). Where prose and vectors disagree, vectors win. Reference: `src/`. Shapes: `contracts/openapi.yaml`.
 
 ## 1. Signals
 
@@ -47,6 +47,7 @@ A **strong link** is a device or payment cluster of 3 or more, or provider risk 
 |120 or more requests per minute (600 or more)|0.3 (0.5)|HIGH_REQUEST_RATE|
 |robots.txt violations|0.3|ROBOTS_VIOLATION|
 |half or more requests re-fetch unchanged content|0.2|UNCHANGED_REFETCH|
+|120 or more requests per minute and 10% or more error responses (401 and 429 excluded)|0.2|ERROR_RESPONSE_RATIO|
 |proxy network: residential 0.2, other 0.15|x confidence|PROXY_NETWORK|
 |HTTP library or empty user agent|0.1|NON_BROWSER_CLIENT|
 
@@ -54,7 +55,7 @@ A **strong link** is a device or payment cluster of 3 or more, or provider risk 
 
 ## 3. Classification, first match wins
 
-1. Verified search engine (`bot.verified`, confidence 0.8 or more): `search_engine`, allow. Never slowed.
+1. Verified search engine (`bot.verified`, confidence 0.8 or more): `search_engine`, allow.
 2. Other verified crawler: `declared_crawler`; allow, or slow by rate budget above 60 requests per minute.
 3. Self-declared bot on content, no robots violations, within crawl rate: `declared_crawler`, allow.
 4. Assistive tool declared (confidence 0.5 or more), unless strong link with farm at 0.5 or more, or scraper at 0.8 or more: `assistive_tool`; allow, or limit when a non-paying subject is over budget. Never step-up, slow or block.
@@ -66,7 +67,7 @@ A **strong link** is a device or payment cluster of 3 or more, or provider risk 
 10. Over budget: `legitimate_heavy_user`; paying allow, else limit.
 11. Otherwise `legitimate_user`, or `legitimate_heavy_user` when paying with 120 or more requests per minute or cost ratio at 0.8 or more. Allow.
 
-Two classes were added to the brief's list because it had no class for an ordinary user or a polite crawler: `legitimate_user`, `declared_crawler`.
+Added to the brief's classes: `legitimate_user`, `declared_crawler`.
 
 ## 4. Actions
 
@@ -77,9 +78,16 @@ Two classes were added to the brief's list because it had no class for an ordina
 |limit|429 with Retry-After until the budget window resets.|
 |block|403. Only `likely_farm` at 0.85 or more with a strong link and healthy providers, or an agent denied by policy.|
 
-## 5. Recovery
+## 5. Recovery, standing and settings
 
 Every non-allow verdict carries `recovery` with `appeal: true`, paths and an SLA (default 24 h). `inconclusive` can only allow or step up.
+
+Applied after classification; class and scores do not change (what triggers them: ACTIONS.md):
+
+- `standing.trusted`: step-up, slow and block become allow (`OPERATOR_TRUSTED`). Limits still apply.
+- `standing.appeal_open`: block becomes step-up (`APPEAL_OPEN`).
+- `policy.allowed_actions`: a block or slow that is not permitted becomes a step-up if that is permitted, otherwise allow; a limit becomes allow (`ACTION_NOT_PERMITTED`).
+- `policy.step_up_order` reorders the rungs; `manual_review` stays last.
 
 ## 6. Modes and fallback
 
@@ -88,18 +96,13 @@ Every non-allow verdict carries `recovery` with `appeal: true`, paths and an SLA
 
 ## 7. Confidence
 
-The winning score (farm or scraper), the verifying signal's confidence, a fixed 0.6 to 0.7 for budget and reseller rules, 0.4 for unverified agents, or `1 - max(farm, scraper)` bounded to 0.5..0.99 for legitimate classes. It ranks verdicts; it is not a calibrated probability.
+The winning score, the verifying signal's confidence, or a fixed value for rule-based classes. It ranks verdicts; it is not a calibrated probability.
 
-## 8. Configuration
+## 8. Configuration and versioning
 
-Every threshold above is an `AG_*` environment variable with the default shown in `loadConfig` (`src/scoring.js`). Golden vectors assume defaults.
+Every threshold is an `AG_*` variable (`loadConfig`). Golden vectors assume defaults. Reason codes are append-only; a changed vector outcome is a major version. 1.1.0 added the error-ratio evidence, standing and settings.
 
-## 9. Versioning
-
-Reason codes are append-only. A changed vector outcome is a major version.
-
-## 10. Known limits
+## 9. Known limits
 
 - Linking quality bounds everything. A farm with distinct devices, no shared card and no provider signal scores as individual users; only the budget limit applies.
-- Assistive declaration is self-asserted.
-- Weights are judgement, tuned on synthetic data only.
+- Weights are judgement.

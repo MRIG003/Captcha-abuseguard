@@ -12,7 +12,7 @@
  * saveDecision(tenant, verdict)                   -> decision id
  * getDecision(tenant, id)                         -> stored verdict or null
  * saveAppeal(tenant, decisionId, {channel, note}) -> appeal id
- * resolveAppeal(tenant, appealId, outcome)        -> void   outcome: 'overturned' | 'upheld'
+ * resolveAppeal(tenant, appealId, outcome)        -> decision id   outcome: 'overturned' | 'upheld'
  * saveOutcome(tenant, decisionId, label)          -> void   label: 'abusive' | 'legitimate' | 'converted'
  * accuracy(tenant)                                -> {decisions, non_allow, appeals, overturned, labelled, labelled_abusive}
  *                                                    (labelled counts cover non-allow decisions only)

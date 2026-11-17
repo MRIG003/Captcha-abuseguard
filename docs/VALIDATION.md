@@ -1,6 +1,7 @@
 # Validation on public data
 
-Run on 2026-11-17 with the unmodified decision engine and default thresholds.
+Run on 2026-11-17 with default thresholds. First run: spec 1.0.0. Re-run after adding the error-ratio signal: spec 1.1.0.
+Figures below are from the re-run; where the two runs differ, both are shown.
 
 ```bash
 node validation/run.js
@@ -16,7 +17,7 @@ section).
 |---|---|---|---|
 | Telling declared crawlers from browsers | 2,125 real crawler user-agents; 100 current browser user-agents | 96.9% of crawlers recognised as automation, 3.1% mistaken for a browser; 100% of browsers recognised | Solid for declared identity. Says nothing about bots that fake a browser string |
 | Not flagging ordinary traffic | 51,462 real nginx requests, 2,797 clients | 0 clients flagged | Weak: one low-traffic download site from 2015, no ground truth |
-| Catching aggressive automation | 17,849 labelled vulnerability-scanner requests, alone and mixed into the real traffic | 98.0% of scanner requests came from flagged clients; 100% of flagged requests were scanner requests | Moderate: three tools, one lab network. Two of the three got only the lightest response |
+| Catching aggressive automation | 17,849 labelled vulnerability-scanner requests, alone and mixed into the real traffic | 98.0% of scanner requests came from flagged clients; 100% of flagged requests were scanner requests; all three tools are now slowed | Moderate: three tools, one lab network |
 | Per-human budget vs per-key budget | Real LLM request sizes (Azure, BurstGPT) with invented identities | Per-key budget caught 0-3.7% of farm cost; cluster budget caught 100% | Arithmetic only: the device links were given, not detected |
 | Detecting multi-account farms | none reachable | not tested | Nothing |
 
@@ -61,11 +62,11 @@ is a check that the engine does not misfire on quiet legitimate automation, not 
 Source: `ocatak/apache-http-logs` (Baş Seyyar, Çatak and Gül, 2018): access logs produced by Acunetix, Netsparker
 and w3af against a test application. Every request is abusive automation, sent with a browser-like user-agent.
 
-| Tool | Requests | Share from flagged clients | Verdict on the main scanner client | Requests answered with an error status |
-|---|---|---|---|---|
-| Acunetix | 6,538 | 99.9% | inconclusive, proof-of-work step-up (peak 414 requests a minute) | 15.0% |
-| Netsparker | 7,314 | 96.9% | inconclusive, proof-of-work step-up (peak 2,833 a minute) | 35.8% |
-| w3af | 3,996 | 96.7% | suspected scraper, slowed (peak 1,476 a minute) | 25.2% |
+| Tool | Requests | Share from flagged clients | Verdict before (1.0.0) | Verdict now (1.1.0) | Error responses |
+|---|---|---|---|---|---|
+| Acunetix | 6,538 | 99.9% | inconclusive, proof-of-work step-up | suspected scraper, slowed | 15.0% |
+| Netsparker | 7,314 | 96.9% | inconclusive, proof-of-work step-up | suspected scraper, slowed | 35.8% |
+| w3af | 3,996 | 96.7% | suspected scraper, slowed | suspected scraper, slowed | 25.2% |
 
 Mixed into the E2 traffic (69,311 requests in total):
 
@@ -75,11 +76,12 @@ Mixed into the E2 traffic (69,311 requests in total):
 
 What this shows about the product:
 
-- Rate is carrying almost all of the detection. With a browser-like user-agent and no robots.txt information, the
-  score reaches only the "inconclusive" band for two of three tools, so they get a step-up, not a slow-down.
-- Scanners produce 15-36% error responses. The engine does not use response status at all. Adding an error-ratio
-  signal would likely move these cases from inconclusive to slowed. It changes scoring weights, so it needs review
-  before it is made (CONTEXT.md, "do not change without review").
+- In the first run rate carried almost all of the detection, and two of three tools reached only the
+  "inconclusive" band. Scanners produce 15-36% error responses, which the engine ignored.
+- The error-ratio signal (approved and added in 1.1.0) counts a high share of error responses only when the
+  request rate is also high. It moved all three tools to "slowed". Recall and precision are unchanged, and the
+  real traffic in E2 is still untouched (0 of 2,797 flagged), including package managers that hit many 404s.
+- The six missed low-volume sessions are still missed; they are under the rate threshold.
 - A scanner is not a scraper. This validates the "aggressive automation" path, not content scraping.
 
 ## E4. Cost budgets on real LLM usage

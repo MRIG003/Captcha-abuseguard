@@ -16,7 +16,8 @@
     "demo": "node scripts/demo.js",
     "start": "node service/server.js",
     "migrate": "node service/migrate.js",
-    "audit": "node scripts/audit.js"
+    "audit": "node scripts/audit.js",
+    "validate": "node validation/run.js"
   },
   "peerDependencies": {
     "pg": ">=8"

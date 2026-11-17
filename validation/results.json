@@ -1,0 +1,317 @@
+{
+  "generated_at": "2026-11-17T06:38:07.962Z",
+  "engine_defaults": {
+    "rpmHigh": 120,
+    "scraperSlow": 0.6,
+    "budgetUsd": 5
+  },
+  "e1_user_agent_classification": {
+    "crawler_user_agents": {
+      "n": 2125,
+      "classes": {
+        "declared_bot": 1648,
+        "library": 381,
+        "declared_agent": 30,
+        "browser": 66
+      },
+      "recognised_as_declared_bot_pct": 77.55,
+      "recognised_as_any_automation_pct": 96.89,
+      "mistaken_for_browser_pct": 3.11
+    },
+    "real_browser_user_agents": {
+      "n": 100,
+      "classes": {
+        "browser": 100
+      },
+      "classified_browser_pct": 100
+    },
+    "ai_crawler_names": {
+      "n": 208,
+      "classes": {
+        "declared_bot": 123,
+        "library": 67,
+        "declared_agent": 18
+      },
+      "recognised_as_any_automation_pct": 100,
+      "missed_examples": []
+    }
+  },
+  "e2_real_nginx_traffic": {
+    "lines": 51462,
+    "skipped": 0,
+    "subjects": 2797,
+    "window": {
+      "from": "2015-05-17T08:05:00.000Z",
+      "to": "2015-06-04T07:06:52.000Z"
+    },
+    "analyse_ms": 263,
+    "by_class": {
+      "legitimate_user": {
+        "subjects": 2499,
+        "requests": 50489,
+        "cost_usd": 0.6861258203199986
+      },
+      "declared_crawler": {
+        "subjects": 298,
+        "requests": 973,
+        "cost_usd": 2.029048470080001
+      }
+    },
+    "by_decision": {
+      "allow": 2797
+    },
+    "groups": {
+      "package_or_cli_client": {
+        "subjects": 2594,
+        "requests": 50086,
+        "allow": 2594,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      },
+      "browser_ua": {
+        "subjects": 10,
+        "requests": 146,
+        "allow": 10,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      },
+      "listed_crawler": {
+        "subjects": 126,
+        "requests": 649,
+        "allow": 126,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      },
+      "other_automation": {
+        "subjects": 67,
+        "requests": 581,
+        "allow": 67,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      }
+    },
+    "examples_not_allowed": []
+  },
+  "e3_labelled_scanners": {
+    "scanners": {
+      "acunetix": {
+        "lines": 6539,
+        "skipped": 1,
+        "subjects": 3,
+        "requests_from_flagged_subjects_pct": 99.88,
+        "error_status_pct": 14.96,
+        "subjects_detail": [
+          {
+            "class": "inconclusive",
+            "decision": "step_up",
+            "requests": 6530,
+            "peak_rpm": 414,
+            "reasons": [
+              "HIGH_REQUEST_RATE",
+              "UNCHANGED_REFETCH",
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          },
+          {
+            "class": "legitimate_user",
+            "decision": "allow",
+            "requests": 6,
+            "peak_rpm": 6,
+            "reasons": [
+              "NON_BROWSER_CLIENT",
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          },
+          {
+            "class": "legitimate_user",
+            "decision": "allow",
+            "requests": 2,
+            "peak_rpm": 2,
+            "reasons": [
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          }
+        ]
+      },
+      "netsparker": {
+        "lines": 7314,
+        "skipped": 0,
+        "subjects": 2,
+        "requests_from_flagged_subjects_pct": 96.94,
+        "error_status_pct": 35.82,
+        "subjects_detail": [
+          {
+            "class": "inconclusive",
+            "decision": "step_up",
+            "requests": 7090,
+            "peak_rpm": 2833,
+            "reasons": [
+              "HIGH_REQUEST_RATE",
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          },
+          {
+            "class": "legitimate_user",
+            "decision": "allow",
+            "requests": 224,
+            "peak_rpm": 92,
+            "reasons": [
+              "UNCHANGED_REFETCH",
+              "NON_BROWSER_CLIENT",
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          }
+        ]
+      },
+      "w3af": {
+        "lines": 3996,
+        "skipped": 0,
+        "subjects": 4,
+        "requests_from_flagged_subjects_pct": 96.7,
+        "error_status_pct": 25.15,
+        "subjects_detail": [
+          {
+            "class": "suspected_scraper",
+            "decision": "slow",
+            "requests": 3864,
+            "peak_rpm": 1476,
+            "reasons": [
+              "HIGH_REQUEST_RATE",
+              "UNCHANGED_REFETCH",
+              "NON_BROWSER_CLIENT",
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          },
+          {
+            "class": "legitimate_user",
+            "decision": "allow",
+            "requests": 50,
+            "peak_rpm": 17,
+            "reasons": [
+              "UNCHANGED_REFETCH",
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          },
+          {
+            "class": "legitimate_user",
+            "decision": "allow",
+            "requests": 20,
+            "peak_rpm": 16,
+            "reasons": [
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          },
+          {
+            "class": "legitimate_user",
+            "decision": "allow",
+            "requests": 62,
+            "peak_rpm": 31,
+            "reasons": [
+              "UNCHANGED_REFETCH",
+              "NON_BROWSER_CLIENT",
+              "NO_EXTERNAL_SIGNALS"
+            ]
+          }
+        ]
+      }
+    },
+    "mixed_with_real_traffic": {
+      "subjects": {
+        "scanner_flagged": 3,
+        "scanner_missed": 6,
+        "real_traffic_flagged": 0,
+        "real_traffic_allowed": 2797
+      },
+      "scanner_request_recall_pct": 97.96,
+      "request_precision_pct": 100,
+      "real_traffic_subjects_flagged_pct": 0
+    }
+  },
+  "e4_llm_cost_traces": {
+    "assumed_price_usd_per_million_tokens": {
+      "inPerM": 3,
+      "outPerM": 15
+    },
+    "per_request_cost": {
+      "azure_conv.csv": {
+        "requests": 19366,
+        "mean_usd": 0.00663,
+        "p50_usd": 0.00678,
+        "p99_usd": 0.01522,
+        "max_usd": 0.04274
+      },
+      "azure_code.csv": {
+        "requests": 8819,
+        "mean_usd": 0.00656,
+        "p50_usd": 0.00484,
+        "p99_usd": 0.0228,
+        "max_usd": 0.0289
+      },
+      "burstgpt_1.csv (first 24 h)": {
+        "requests": 3389,
+        "mean_usd": 0.0054,
+        "p50_usd": 0.00467,
+        "p99_usd": 0.01869,
+        "max_usd": 0.03379,
+        "total_usd": 18.3
+      }
+    },
+    "semi_synthetic_farm": {
+      "identities": {
+        "ordinary_users_active": 868,
+        "farms": 10,
+        "accounts_per_farm": 40
+      },
+      "budgets": [
+        {
+          "budget_rule": "p90 of ordinary users' daily spend",
+          "budget_usd": 0.0271,
+          "farm_cost_usd": 3.79,
+          "farm_accounts": 400,
+          "farm_accounts_over_own_budget": 4,
+          "farm_accounts_flagged_cluster": 400,
+          "farm_cost_caught_per_identifier_pct": 3.73,
+          "farm_cost_caught_cluster_pct": 100,
+          "ordinary_users_limited_per_identifier_pct": 10.02,
+          "ordinary_users_limited_cluster_pct": 10.02
+        },
+        {
+          "budget_rule": "p95 of ordinary users' daily spend",
+          "budget_usd": 0.0468,
+          "farm_cost_usd": 3.79,
+          "farm_accounts": 400,
+          "farm_accounts_over_own_budget": 0,
+          "farm_accounts_flagged_cluster": 400,
+          "farm_cost_caught_per_identifier_pct": 0,
+          "farm_cost_caught_cluster_pct": 100,
+          "ordinary_users_limited_per_identifier_pct": 5.07,
+          "ordinary_users_limited_cluster_pct": 5.07
+        },
+        {
+          "budget_rule": "p99 of ordinary users' daily spend",
+          "budget_usd": 0.1471,
+          "farm_cost_usd": 3.79,
+          "farm_accounts": 400,
+          "farm_accounts_over_own_budget": 0,
+          "farm_accounts_flagged_cluster": 400,
+          "farm_cost_caught_per_identifier_pct": 0,
+          "farm_cost_caught_cluster_pct": 100,
+          "ordinary_users_limited_per_identifier_pct": 1.04,
+          "ordinary_users_limited_cluster_pct": 1.04
+        }
+      ]
+    }
+  }
+}

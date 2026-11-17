@@ -16,6 +16,9 @@ Ordered. Each task is sized for one session of a mid-tier model. Read `CONTEXT.m
 |T08|CLI done (`scripts/audit.js`)|Streaming, gzip, CDN field mappings, rotating-client clustering|
 |T06, T07, T09-T15|Not started|Everything|
 
+Validation on public data is in `docs/VALIDATION.md`. Open follow-ups from it: an error-ratio signal for scanners (needs
+review: changes scoring), and the blocked datasets (labelled farms, labelled bot logs) once their hosts are reachable.
+
 Known gaps in what was built:
 
 - Pushed signals (`/v1/signals`) and audit reports are kept in process memory, not in the store.

@@ -19,7 +19,11 @@ test('parseLine reads JSON lines and rejects garbage', () => {
 test('uaClass', () => {
   assert.equal(uaClass('Mozilla/5.0 (compatible; Googlebot/2.1)'), 'declared_bot');
   assert.equal(uaClass('python-requests/2.32'), 'library');
-  assert.equal(uaClass('Mozilla/5.0 Chrome/140 Safari/537'), 'browser');
+  assert.equal(uaClass('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'), 'browser');
+  assert.equal(uaClass('Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)'), 'browser');
+  assert.equal(uaClass('Debian APT-HTTP/1.3 (0.8.16)'), 'library');
+  assert.equal(uaClass('Mozilla/5.0 (compatible; YandexImages/3.0; +http://yandex.com/bots)'), 'declared_bot');
+  assert.equal(uaClass('facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'), 'declared_bot');
   assert.equal(uaClass('Mozilla/5.0 ChatGPT-User/1.0'), 'declared_agent');
   assert.equal(uaClass('-'), 'empty');
 });

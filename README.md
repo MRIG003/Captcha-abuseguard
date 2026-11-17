@@ -122,7 +122,8 @@ in `src/scoring.js`. Per-tenant budgets, mode and agent policies are set through
 | Agent passes, signal-provider adapters, webhooks, edge adapters, other SDKs | Specified in the contract, **not built** (the API answers 501) |
 | CI on macOS, Windows, Node 24 | Configured, not yet observed running |
 
-Accuracy figures in `docs/GAP-ANALYSIS.md` come from synthetic data. Nothing has been run on real traffic.
+Accuracy figures in `docs/GAP-ANALYSIS.md` come from synthetic data. `docs/VALIDATION.md` reports runs on public
+logs and usage traces; nothing has been run on a customer's traffic.
 
 ## Where things are
 
@@ -130,4 +131,5 @@ Accuracy figures in `docs/GAP-ANALYSIS.md` come from synthetic data. Nothing has
 - `docs/GAP-ANALYSIS.md` - what existing tools do, where this is better, at parity or behind.
 - `docs/DECISION-SPEC.md` - the rules. `contracts/golden-vectors.json` - the test vectors that pin them.
 - `contracts/openapi.yaml` - the API. `contracts/CONFORMANCE.md` - what every SDK must pass.
+- `docs/VALIDATION.md` - results on public datasets and what is still unproven.
 - `docs/DECISIONS-FOR-HUMAN.md` - open decisions. `docs/BACKLOG.md` - what is left.

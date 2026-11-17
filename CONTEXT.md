@@ -24,7 +24,7 @@ Team assumption: 2 engineers, 3 months to MVP.
 
 | Area | State |
 |------|-------|
-| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 718 lines) |
+| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 720 lines) |
 | Postgres store adapter | Passes the adapter contract on a live PostgreSQL 16 (`test/store.pg.test.js`) |
 | HTTP service | Built, tested (`service/app.js`, `test/service.test.js`); also smoke-tested on Postgres |
 | Node SDK | Built (`sdk/node/`); passes the conformance suite as `AG_CONFORMANCE_CLIENT` |
@@ -48,6 +48,7 @@ Team assumption: 2 engineers, 3 months to MVP.
 | `docs/BACKLOG.md` | Ordered tasks T00-T15 |
 | `docs/MANUAL-OUTLINE.md` | Outline of user documentation |
 | `docs/ANALYSIS.md` | Substitutes, risks, market size, kill criteria |
+| `docs/VALIDATION.md` | Results on public datasets (`validation/run.js`), and what could not be validated |
 | `contracts/` | `openapi.yaml`, `schema.sql`, `golden-vectors.json`, `CONFORMANCE.md` |
 | `src/` | Reference core. `index.js` is the only public entry |
 | `service/` | HTTP service (`app.js`), entry point (`server.js`), migration (`migrate.js`) |
@@ -129,7 +130,8 @@ used only by the Postgres adapter.
 ## Known weak points to keep honest about
 
 - "Better" on cluster budgets holds only as one integrated product; appeals and log audit rest on one page read per vendor.
-- Accuracy numbers are from invented synthetic populations.
+- Accuracy numbers are from invented synthetic populations, plus the limited public-data results in VALIDATION.md.
+- The engine ignores response status; scanners with a browser-like user-agent reach only `inconclusive` (VALIDATION.md E3).
 - Linking quality bounds the product; farms with no shared device, card or provider signal look like separate users.
 - The assistive declaration is self-asserted.
 - An in-house SQL job can reproduce the core idea for a team that already stores device identifiers.

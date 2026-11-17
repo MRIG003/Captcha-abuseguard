@@ -30,12 +30,14 @@ export function parseLine(line) {
   return { ts, ip: m[1], key: null, path: m[4], status: +m[5], bytes: m[6] === '-' ? 0 : +m[6], ua: m[7] ?? '', rt: m[8] ? +m[8] : 0 };
 }
 
+const BOT_UA = /bots?\b|crawl|spider|slurp|fetch|archiv|monitor|uptime|check|scan|index|feed|preview|\+https?:\/\/|compatible;(?!\s*MSIE)/i;
+const BROWSER_UA = /^(Mozilla|Opera)\/.*(Windows NT|Macintosh|X11|Linux|Android|iPhone|iPad|CrOS).*(AppleWebKit|Gecko|Trident|MSIE|Presto)/;
+
 export function uaClass(ua) {
   if (!ua || ua === '-') return 'empty';
-  if (/bot\b|crawler|spider|slurp/i.test(ua)) return 'declared_bot';
-  if (/chatgpt-user|\bagent\b|operator/i.test(ua)) return 'declared_agent';
-  if (/curl|wget|python|go-http|okhttp|java\/|node|axios|scrapy|libwww|httpx/i.test(ua)) return 'library';
-  return 'browser';
+  if (/chatgpt-user|-user\b|\bagent\b|operator/i.test(ua)) return 'declared_agent';
+  if (BOT_UA.test(ua)) return 'declared_bot';
+  return BROWSER_UA.test(ua) ? 'browser' : 'library';
 }
 
 const savedUsd = (verdict, sub, cfg) => {

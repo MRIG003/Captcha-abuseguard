@@ -16,6 +16,9 @@ Ordered. Each task is sized for one session of a mid-tier model. Read `CONTEXT.m
 |T08|CLI done (`scripts/audit.js`)|Streaming, gzip, CDN field mappings, rotating-client clustering|
 |T06, T07, T09-T15|Not started|Everything|
 
+Fifth round: layers 2 to 5 run on live traffic (`service/liveTracker.js`, `src/features.js`, `test/live.test.js`, package
+0.4.0). Open from it: shared live state across instances, other-language middleware, edge workers.
+
 Third round (same day): error-ratio signal (spec 1.1.0), the action layer and settings/presets are built (`docs/ACTIONS.md`).
 Open from it: enforcement in other SDKs and at the edge, a shared rate budget (Redis or the store), stored webhook
 deliveries with replay, a real live check behind the `human_check` rung, `charge` and `ask to log in` actions,

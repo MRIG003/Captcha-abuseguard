@@ -3,6 +3,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { SPEC_VERSION, DEFAULT_CONFIG, decide, explain, attributeCost, analyzeLines, subjectKey } from '../src/index.js';
 import { PRESETS, strictnessConfig } from './presets.js';
+import { createLiveTracker } from './liveTracker.js';
 
 const KINDS = ['account', 'api_key', 'session', 'device_cluster', 'payment_instrument'];
 const LINK_TYPES = ['device', 'payment', 'ip', 'email_domain'];
@@ -57,7 +58,10 @@ async function readJson(req) {
  * @param {{store: any, config?: any, apiKeys?: string, now?: () => number}} deps
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void>}
  */
-export function createApp({ store, config = DEFAULT_CONFIG, apiKeys = '', now = () => Date.now(), allowPrivateWebhooks = false }) {
+export function createApp({ store, config = DEFAULT_CONFIG, apiKeys = '', now = () => Date.now(), allowPrivateWebhooks = false, tracker = createLiveTracker() }) {
+  const liveOpts = (policy) => ({ disallow: policy?.robots_disallow ?? [], trapPaths: policy?.trap_paths ?? [], convertedPaths: policy?.converted_paths ?? [], endpointCosts: policy?.endpoint_costs ?? [] });
+  const eventTs = (value) => { const t = typeof value === 'number' ? value : Date.parse(value); return Number.isFinite(t) ? t : now(); };
+  const validRequest = (r) => r && typeof r.path === 'string' && r.path.length > 0 && r.path.length <= 2048;
   const tenantFor = parseApiKeys(apiKeys);
   const signalCache = new Map(), audits = new Map(), flaggedAt = new Map(), pending = new Set();
   let auditSeq = 0, eventSeq = 0;
@@ -109,6 +113,12 @@ export function createApp({ store, config = DEFAULT_CONFIG, apiKeys = '', now = 
       store.getSubject(tenant, subject), store.clusterSize(tenant, subject, 'device'), store.clusterSize(tenant, subject, 'payment'),
       store.clusterSize(tenant, subject, 'ip'), store.clusterUsage(tenant, subject, windowStart(cfg), ['device', 'payment']),
     ]);
+    // Live layers 2 to 5: count this request, then read the subject's rate, pattern and timing features.
+    if (input.request !== undefined) {
+      if (!validRequest(input.request)) throw new Problem(400, 'Invalid Request', 'request.path is required');
+      tracker.arrive(tenant, subjectKey(subject), { ts: eventTs(input.request.ts), path: input.request.path, ua: input.request.ua }, liveOpts(policy));
+    }
+    const live = tracker.behavior(tenant, subjectKey(subject)) ?? {};
     const known = Object.fromEntries(ATTRS.filter((k) => stored?.attrs?.[k] !== undefined).map((k) => [k, stored.attrs[k]]));
     const b = input.behavior ?? {}, signals = [...freshSignals(tenant, subject), ...(Array.isArray(input.signals) ? input.signals : [])];
     const agentId = signals.find((s) => s.type === 'agent.credential')?.value?.agent_id;
@@ -120,15 +130,26 @@ export function createApp({ store, config = DEFAULT_CONFIG, apiKeys = '', now = 
       cfg, policy,
       request: {
         ...input, subject, signals, standing, policy: { ...settings, ...(input.policy ?? {}) },
-        behavior: { ...known, ...b, device_cluster: Math.max(b.device_cluster ?? 0, device), payment_cluster: Math.max(b.payment_cluster ?? 0, payment), ip_cluster: Math.max(b.ip_cluster ?? 0, ip) },
+        behavior: { ...known, ...live, ...b, device_cluster: Math.max(b.device_cluster ?? 0, device), payment_cluster: Math.max(b.payment_cluster ?? 0, payment), ip_cluster: Math.max(b.ip_cluster ?? 0, ip) },
         cost: { usd: input.cost?.usd ?? usage.cost_usd, budget_usd: input.cost?.budget_usd ?? budgetFor(policy, cfg, { ...input, subject }) },
         ...(agentPolicy ? { agent_policy: agentPolicy } : {}),
       },
     };
   }
 
-  async function ingest(tenant, event, cfg) {
+  async function ingest(tenant, event, cfg, policy) {
     const subject = needSubject(event.subject);
+    if (event.type === 'request' || event.type === 'response') {
+      // `request`: a finished request reported in one event. `response`: the outcome of a request already counted at decision time.
+      const r = event.type === 'request' ? event.request : event.response;
+      if (!validRequest(r)) throw new Problem(400, 'Invalid Request', `${event.type}.path is required`);
+      const key = subjectKey(subject), e = { ts: eventTs(event.ts), path: r.path, ua: r.ua, status: Number(r.status) || 0, bytes: Number(r.bytes) || 0, rt: Number(r.rt) || 0 };
+      if (event.type === 'request') tracker.arrive(tenant, key, e, liveOpts(policy));
+      const cost = tracker.complete(tenant, key, e, liveOpts(policy), cfg);
+      await store.upsertSubject(tenant, subject);
+      await store.addUsage(tenant, subject, windowStart(cfg), { requests: event.type === 'request' ? 1 : 0, cost_usd: cost });
+      return;
+    }
     if (event.type === 'usage') {
       const u = event.usage ?? {};
       await store.upsertSubject(tenant, subject);
@@ -202,10 +223,10 @@ export function createApp({ store, config = DEFAULT_CONFIG, apiKeys = '', now = 
     if (a === 'events' && m === 'POST') {
       const { events } = await readJson(req);
       if (!Array.isArray(events) || events.length > 1000) throw new Problem(400, 'Invalid Request', 'events must be an array of at most 1000');
-      const cfg = tenantConfig(await store.getPolicy(tenant));
+      const policy = await store.getPolicy(tenant), cfg = tenantConfig(policy);
       let accepted = 0, rejected = 0;
       for (const event of events) {
-        try { await ingest(tenant, event ?? {}, cfg); accepted++; } catch (err) { if (!(err instanceof Problem)) throw err; rejected++; }
+        try { await ingest(tenant, event ?? {}, cfg, policy); accepted++; } catch (err) { if (!(err instanceof Problem)) throw err; rejected++; }
       }
       return send(res, 202, { accepted, rejected });
     }
@@ -227,15 +248,15 @@ export function createApp({ store, config = DEFAULT_CONFIG, apiKeys = '', now = 
     }
     if (a === 'subjects' && b && c && !seg[4]) {
       const subject = needSubject({ kind: b, id: decodeURIComponent(c) });
-      if (m === 'DELETE') { await store.eraseSubject(tenant, subject); signalCache.delete(`${tenant}|${subjectKey(subject)}`); return send(res, 204); }
+      if (m === 'DELETE') { await store.eraseSubject(tenant, subject); signalCache.delete(`${tenant}|${subjectKey(subject)}`); tracker.forget(tenant, subjectKey(subject)); return send(res, 204); }
       if (m === 'GET') {
-        const stored = await store.getSubject(tenant, subject);
+        const stored = (await store.getSubject(tenant, subject)) ?? (tracker.behavior(tenant, subjectKey(subject)) ? { attrs: {} } : null);
         if (!stored) throw new Problem(404, 'Not Found', 'subject');
         const policy = await store.getPolicy(tenant), cfg = tenantConfig(policy), start = windowStart(cfg);
         const usage = await store.clusterUsage(tenant, subject, start, ['device', 'payment']);
         const clusters = {};
         for (const type of ['device', 'payment', 'ip']) clusters[type] = await store.clusterSize(tenant, subject, type);
-        return send(res, 200, { subject, clusters, converted: stored.attrs?.converted === true, unit: policy?.unit ?? 'usd',
+        return send(res, 200, { subject, clusters, converted: stored.attrs?.converted === true, unit: policy?.unit ?? 'usd', live: tracker.behavior(tenant, subjectKey(subject)),
           standing: { trusted: (stored.attrs?.trusted_until ?? 0) > now(), appeal_open: stored.attrs?.appeal_open === true },
           window: { start: new Date(start).toISOString(), requests: usage.requests, cost_attributed_usd: usage.cost_usd, budget_usd: budgetFor(policy, cfg, { subject }) } });
       }

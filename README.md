@@ -102,10 +102,24 @@ app.use('/api/generate', ag.middleware((req) => ({
 
 The SDK hashes identifiers before they leave your process, waits at most 150 ms, and fails open.
 
+The middleware also tells the service about each request and how it ended (path, client type, status, size,
+time). From that the service works out request rate, error share, page-order patterns and timing for each
+visitor on live traffic, so a scraper is flagged while it is still running. For visitors with no account:
+
+```js
+app.use(ag.middleware((req) => ({
+  subject: ag.subject('session', `${req.ip}|${req.get('user-agent')}`),
+  context: { surface: 'content' },
+})));
+```
+
+Set `robots_disallow`, `trap_paths` and `endpoint_costs` in the policy to add robots.txt, trap-link and cost
+evidence. Live statistics are held in the service's memory: with several instances each sees only its share.
+
 ## Configuration
 
 Environment variables only. The service needs `AG_API_KEYS` (`tenant:key`, comma-separated); `PORT` (8787),
-`DATABASE_URL`, `AG_MODE` (`shadow`), `AG_BUDGET_USD` (5) and `AG_BUDGET_WINDOW_S` (86400) are the ones most
+`DATABASE_URL`, `AG_LIVE_MAX_SUBJECTS` (100000), `AG_LIVE_IDLE_S` (3600), `AG_MODE` (`shadow`), `AG_BUDGET_USD` (5) and `AG_BUDGET_WINDOW_S` (86400) are the ones most
 people change. The full table with defaults is in `docs/MANUAL-OUTLINE.md` section 4; the code is `loadConfig`
 in `src/scoring.js`. Per-tenant budgets, mode and agent policies are set through `PUT /v1/policy`.
 
@@ -114,6 +128,7 @@ in `src/scoring.js`. Per-tenant budgets, mode and agent policies are set through
 | Part | State |
 |------|-------|
 | Scoring core, decision engine, explainer, log analyzer | Built and tested, 75 golden vectors |
+| Rate, pattern and timing signals on live traffic | Built and tested; replayed on public logs (`docs/VALIDATION.md` E5). State is per process |
 | Actions after a flag (step-up loop, appeals, trust, signed webhooks, rate budget in the SDK) | Built and tested (`docs/ACTIONS.md`) |
 | Settings and presets (strictness, allowed actions, check order, nine presets) | Built and tested; preset numbers are untuned starting points |
 | HTTP service (decisions, appeals, outcomes, events, subjects, policy, agent policies, signals, audits, accuracy) | Built and tested |

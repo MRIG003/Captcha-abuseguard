@@ -2,7 +2,8 @@
 /** Batch log audit: server/CDN logs -> per-subject behaviour and cost -> shadow verdicts -> dollar report. */
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { DEFAULT_CONFIG, attributeCost, hashId } from './scoring.js';
+import { DEFAULT_CONFIG, hashId } from './scoring.js';
+import { newStats, observe, behaviorOf } from './features.js';
 import { decide } from './engine.js';
 
 const CLF = /^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d{3}) (\d+|-)(?: "[^"]*" "([^"]*)")?(?: (\d+(?:\.\d+)?))?/;
@@ -40,8 +41,6 @@ export function uaClass(ua) {
   return BROWSER_UA.test(ua) ? 'browser' : 'library';
 }
 
-const ASSET = /\.(css|js|mjs|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|map)(\?|$)/i;
-
 const savedUsd = (verdict, sub, cfg) => {
   if (verdict.decision === 'block') return sub.cost;
   if (verdict.decision === 'limit') return Math.max(0, sub.cost - cfg.budgetUsd);
@@ -68,28 +67,10 @@ export function analyzeLines(lines, opts = {}) {
     const id = hashId(salt, e.key ?? `${e.ip}|${e.ua}`);
     let s = subs.get(id);
     if (!s) {
-      s = { kind: e.key ? 'api_key' : 'session', id, ua: uaClass(e.ua), verified: opts.verifyBot?.(e.ip, e.ua) ?? null,
-        requests: 0, bytes: 0, cost: 0, minutes: new Map(), seen: new Set(), repeats: 0, robots: 0, errors: 0, converted: false, rpm: 0,
-        assets: 0, traps: 0, seq: 0, lastNum: NaN, lastTs: NaN, gapSum: 0, gapSq: 0, hours: new Set(), first: e.ts, last: e.ts };
+      s = { kind: e.key ? 'api_key' : 'session', id, ua: uaClass(e.ua), verified: opts.verifyBot?.(e.ip, e.ua) ?? null, ...newStats(e.ts) };
       subs.set(id, s);
     }
-    s.requests++; s.bytes += e.bytes;
-    const endpoint = endpointCosts.find((x) => e.path.startsWith(x.prefix));
-    s.cost += attributeCost({ cpu_s: e.rt, bytes: e.bytes, direct_usd: endpoint?.usd ?? 0 }, cfg);
-    const minute = Math.floor(e.ts / 60000), n = (s.minutes.get(minute) ?? 0) + 1;
-    s.minutes.set(minute, n); s.rpm = Math.max(s.rpm, n);
-    const seenKey = `${e.path}|${e.bytes}`;
-    if (e.status === 304 || s.seen.has(seenKey)) s.repeats++; else s.seen.add(seenKey);
-    if (disallow.some((p) => e.path.startsWith(p))) s.robots++;
-    if (e.status >= 400 && e.status !== 401 && e.status !== 429) s.errors++; // 401 and 429 are our own or auth replies
-    if (convertedPaths.some((p) => e.path.startsWith(p))) s.converted = true;
-    if (trapPaths.some((p) => e.path.startsWith(p))) s.traps++;
-    if (ASSET.test(e.path)) s.assets++;
-    const num = Number(/(\d+)\D*$/.exec(e.path.split('?')[0])?.[1]);
-    if (num === s.lastNum + 1) s.seq++;
-    s.lastNum = num;
-    if (!Number.isNaN(s.lastTs)) { const gap = Math.abs(e.ts - s.lastTs) / 1000; s.gapSum += gap; s.gapSq += gap * gap; }
-    s.lastTs = e.ts; s.hours.add(Math.floor(e.ts / 3600000)); s.first = Math.min(s.first, e.ts); s.last = Math.max(s.last, e.ts);
+    observe(s, e, { disallow, trapPaths, convertedPaths, endpointCosts }, cfg);
   }
 
   const report = {
@@ -103,18 +84,10 @@ export function analyzeLines(lines, opts = {}) {
   for (const s of subs.values()) assetsAll += s.assets;
   const siteHasAssets = assetsAll / Math.max(1, total - skipped) >= 0.01;
   for (const s of subs.values()) {
-    // Derived pattern features. Each needs enough requests to mean anything; otherwise it is left out.
-    const n = s.requests, gaps = n - 1, mean = gaps > 0 ? s.gapSum / gaps : 0, spanH = (s.last - s.first) / 3600000;
-    const pattern = n < 30 ? {} : {
-      ...(siteHasAssets ? { asset_ratio: s.assets / n } : {}), page_requests: n - s.assets, sequential_ratio: s.seq / n,
-      ...(mean >= 1 ? { interval_cv: Math.sqrt(Math.max(0, s.gapSq / gaps - mean * mean)) / mean } : {}),
-      ...(spanH >= 24 ? { active_hours_ratio: s.hours.size / Math.ceil(spanH + 1) } : {}),
-    };
     const verdict = decide({
       subject: { kind: s.kind, id: s.id }, mode: 'shadow',
       context: { surface: s.kind === 'api_key' ? 'api' : 'content' },
-      behavior: { rpm: s.rpm, robots_violations: s.robots, refetch_unchanged: s.requests >= 20 ? s.repeats / s.requests : 0,
-        error_ratio: s.requests >= 20 ? s.errors / s.requests : 0, ua: s.ua, trap_hits: s.traps, ...pattern },
+      behavior: { ...behaviorOf(s, { siteHasAssets }), ua: s.ua },
       signals: s.verified ? [{ type: 'bot.verified', value: s.verified, confidence: 0.95, freshness_s: 0, provenance: 'log_audit.verify_bot' }] : [],
       cost: { usd: s.cost, budget_usd: cfg.budgetUsd },
     }, cfg);

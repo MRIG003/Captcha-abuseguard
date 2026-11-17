@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17T07:25:07.730Z",
+  "generated_at": "2026-11-17T07:41:41.111Z",
   "engine_defaults": {
     "rpmHigh": 120,
     "scraperSlow": 0.6,
@@ -44,7 +44,7 @@
       "from": "2015-05-17T08:05:00.000Z",
       "to": "2015-06-04T07:06:52.000Z"
     },
-    "analyse_ms": 396,
+    "analyse_ms": 324,
     "by_class": {
       "legitimate_user": {
         "subjects": 2499,
@@ -123,7 +123,7 @@
       "from": "2015-05-17T10:05:00.000Z",
       "to": "2015-05-20T21:05:59.000Z"
     },
-    "analyse_ms": 73,
+    "analyse_ms": 75,
     "by_class": {
       "legitimate_user": {
         "subjects": 1503,
@@ -416,6 +416,54 @@
           "ordinary_users_limited_cluster_pct": 1.04
         }
       ]
+    }
+  },
+  "e5_live_replay": {
+    "real_traffic": {
+      "nginx_download_server": {
+        "requests": 51462,
+        "clients": 2797,
+        "clients_ever_flagged": 0,
+        "clients_ever_flagged_pct": 0,
+        "flagged_at_end": 0,
+        "first_decisions": [],
+        "microseconds_per_request": 8.9
+      },
+      "apache_website": {
+        "requests": 10000,
+        "clients": 1862,
+        "clients_ever_flagged": 0,
+        "clients_ever_flagged_pct": 0,
+        "flagged_at_end": 0,
+        "first_decisions": [],
+        "microseconds_per_request": 10.6
+      }
+    },
+    "scanners": {
+      "acunetix": {
+        "requests": 6538,
+        "main_client_requests": 6530,
+        "first_flag_at_request": 120,
+        "first_decision": "step_up",
+        "final_decision": "slow",
+        "requests_after_first_flag_pct": 98.06
+      },
+      "netsparker": {
+        "requests": 7314,
+        "main_client_requests": 7090,
+        "first_flag_at_request": 120,
+        "first_decision": "slow",
+        "final_decision": "slow",
+        "requests_after_first_flag_pct": 95.31
+      },
+      "w3af": {
+        "requests": 3996,
+        "main_client_requests": 3864,
+        "first_flag_at_request": 151,
+        "first_decision": "slow",
+        "final_decision": "slow",
+        "requests_after_first_flag_pct": 92.94
+      }
     }
   }
 }

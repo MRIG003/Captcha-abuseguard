@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: abuseguard API
-  version: 1.2.0
+  version: 1.3.0
   summary: Traffic referee. Per-human cost budgets, explainable verdicts, governed agent lane, log audit.
   description: |
     Versioning: the path carries the major version (/v1). Every response carries `AG-Spec-Version`
@@ -366,6 +366,7 @@ components:
         signals: { type: array, items: { $ref: '#/components/schemas/Signal' } }
         providers: { type: object, additionalProperties: { enum: [ok, timeout, down] }, description: Health of each configured provider for this request. }
         cost: { $ref: '#/components/schemas/Cost' }
+        request: { type: object, required: [path], description: 'The request being decided. The service counts it and works out rate, pattern and timing for the subject (live layers 2 to 5).', properties: { path: { type: string, maxLength: 2048 }, ua: { type: string }, ts: { type: string, format: date-time } } }
         agent_policy: { $ref: '#/components/schemas/AgentPolicy' }
         standing: { type: object, description: Normally filled by the service from the subject record., properties: { trusted: { type: boolean }, appeal_open: { type: boolean } } }
         policy: { type: object, description: Normally filled by the service from the tenant policy., properties: { allowed_actions: { type: array, items: { enum: [step_up, slow, limit, block] } }, step_up_order: { type: array, items: { type: string } } } }
@@ -434,7 +435,9 @@ components:
       type: object
       required: [type, subject, ts]
       properties:
-        type: { enum: [usage, link, signup, conversion] }
+        type: { enum: [usage, link, signup, conversion, request, response], description: 'request = a finished request in one event. response = outcome of a request already counted at decision time. Both attribute cost; do not also send usage for the same request.' }
+        request: { type: object, required: [path], properties: { path: { type: string }, ua: { type: string }, status: { type: integer }, bytes: { type: integer }, rt: { type: number, description: Seconds. } } }
+        response: { type: object, required: [path], properties: { path: { type: string }, status: { type: integer }, bytes: { type: integer }, rt: { type: number } } }
         subject: { $ref: '#/components/schemas/Subject' }
         ts: { type: string, format: date-time }
         usage: { type: object, properties: { amount: { type: number, description: Fair-share units that are not dollars. }, requests: { type: integer }, cpu_s: { type: number }, bytes: { type: integer }, db_s: { type: number }, direct_usd: { type: number }, endpoint: { type: string } } }
@@ -446,6 +449,7 @@ components:
         clusters: { type: object, additionalProperties: { type: integer } }
         window: { type: object, properties: { start: { type: string, format: date-time }, requests: { type: integer }, cost_attributed_usd: { type: number }, budget_usd: { type: number } } }
         converted: { type: boolean, description: Good traffic converted. }
+        live: { oneOf: [{ $ref: '#/components/schemas/Behavior' }, { type: 'null' }], description: Rate, pattern and timing features currently held for the subject. }
         last_decision: { oneOf: [{ $ref: '#/components/schemas/Verdict' }, { type: 'null' }] }
     SignalProvider:
       type: object
@@ -463,6 +467,10 @@ components:
         strictness: { enum: [watch, gentle, strict], description: 'watch records only; gentle enforces but never blocks; strict enforces everything.' }
         allowed_actions: { type: array, items: { enum: [step_up, slow, limit, block] } }
         step_up_order: { type: array, items: { type: string } }
+        robots_disallow: { type: array, items: { type: string }, description: Path prefixes disallowed by robots.txt. }
+        trap_paths: { type: array, items: { type: string }, description: Hidden links or marker records that people never open. }
+        endpoint_costs: { type: array, items: { type: object, required: [prefix, usd], properties: { prefix: { type: string }, usd: { type: number } } } }
+        converted_paths: { type: array, items: { type: string } }
         unit: { type: string, default: usd, description: 'What the fair share counts: usd, items, tickets, pages, bonuses.' }
         mode: { enum: [shadow, enforce], default: shadow }
         budget_usd: { type: number }

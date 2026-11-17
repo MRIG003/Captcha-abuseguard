@@ -24,7 +24,7 @@ Team assumption: 2 engineers, 3 months to MVP.
 
 | Area | State |
 |------|-------|
-| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 777 lines) |
+| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 837 lines) |
 | Postgres store adapter | Passes the adapter contract on a live PostgreSQL 16 (`test/store.pg.test.js`) |
 | HTTP service | Built, tested (`service/app.js`, `test/service.test.js`); also smoke-tested on Postgres |
 | Node SDK | Built (`sdk/node/`); passes the conformance suite as `AG_CONFORMANCE_CLIENT` |
@@ -53,7 +53,8 @@ Team assumption: 2 engineers, 3 months to MVP.
 | `docs/VALIDATION.md` | Results on public datasets (`validation/run.js`), and what could not be validated |
 | `contracts/` | `openapi.yaml`, `schema.sql`, `golden-vectors.json`, `CONFORMANCE.md` |
 | `src/` | Reference core. `index.js` is the only public entry |
-| `service/` | HTTP service (`app.js`), entry point (`server.js`), migration (`migrate.js`) |
+| `service/` | HTTP service (`app.js`), live tracker (`liveTracker.js`), presets, entry point, migration |
+| `src/features.js` | Request-stream features shared by the log audit and the live tracker. Change it in one place only |
 | `sdk/node/` | Thin Node SDK |
 | `test/` | `*.test.js`, `synth.js` (seeded generator), `conformance/` |
 | `scripts/demo.js`, `scripts/audit.js` | Demo; audit CLI for real log files |
@@ -91,7 +92,7 @@ used only by the Postgres adapter.
 
 - Plain ES modules with JSDoc types (`// @ts-check`); no build step, no TypeScript-only syntax.
 - Zero runtime dependencies in `src/`. Tests use `node:test` and built-ins only.
-- `src/` holds only the scoring core, engine, explainer, log analyzer and store adapters, capped at 780 lines
+- `src/` holds only the scoring core, engine, explainer, log analyzer and store adapters, capped at 880 lines
   (CI). The service, SDKs and adapters live in their own top-level directories and never contain scoring logic.
 - Shared test helpers live in `test/helpers.js`; test files never import each other.
 - The engine is pure: no I/O, no clock, no randomness. Same input and config give the same verdict.
@@ -136,7 +137,7 @@ used only by the Postgres adapter.
 
 - "Better" on cluster budgets holds only as one integrated product; appeals and log audit rest on one page read per vendor.
 - Accuracy numbers are from invented synthetic populations, plus the limited public-data results in VALIDATION.md.
-- Enforcement after a flag exists only in the Node SDK; the rate budget is per process (ACTIONS.md, limits).
+- Enforcement after a flag exists only in the Node SDK; the rate budget and the live statistics are per process.
 - Customers are fitted with settings and presets, never with code written for one customer.
 - Linking quality bounds the product; farms with no shared device, card or provider signal look like separate users.
 - The assistive declaration is self-asserted.

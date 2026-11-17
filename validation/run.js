@@ -185,7 +185,47 @@ async function e4() {
   return { assumed_price_usd_per_million_tokens: PRICE, per_request_cost: dist, semi_synthetic_farm: out };
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// E5. Live replay. The same logs are fed one request at a time, in time order, through the live tracker the
+// service uses, and a decision is taken at every request. Shows how early a client is flagged while it is still
+// running, and whether real traffic is ever flagged along the way (stricter than judging the whole log at the end).
+async function e5() {
+  const { createLiveTracker } = await import('../service/liveTracker.js');
+  const clean = (text) => text.split('\n').map((l) => l.trim().replace(/^"|"$/g, '')).filter(Boolean);
+  const replay = (lines) => {
+    const events = lines.map(parseLine).filter(Boolean).sort((x, y) => x.ts - y.ts);
+    const tracker = createLiveTracker(), subs = new Map();
+    for (const e of events) {
+      const key = `session:${hashId('validation', `${e.ip}|${e.ua}`)}`;
+      tracker.arrive('t', key, e); tracker.complete('t', key, e);
+      const rec = subs.get(key) ?? { requests: 0, firstFlagAt: null, firstDecision: null, after: 0, last: 'allow' };
+      rec.requests++;
+      const v = decide({ subject: { kind: 'session', id: key.slice(8) }, context: { surface: 'content' }, behavior: tracker.behavior('t', key) });
+      if (v.decision !== 'allow' && rec.firstFlagAt === null) { rec.firstFlagAt = rec.requests; rec.firstDecision = v.decision; }
+      if (rec.firstFlagAt !== null) rec.after++;
+      rec.last = v.decision;
+      subs.set(key, rec);
+    }
+    return { events: events.length, subs: [...subs.values()] };
+  };
+  const out = { real_traffic: {}, scanners: {} };
+  for (const [name, file] of [['nginx_download_server', 'nginx_logs'], ['apache_website', 'apache_logs']]) {
+    const t0 = performance.now(), r = replay((await load(file)).split('\n').filter(Boolean)), ms = performance.now() - t0;
+    const ever = r.subs.filter((x) => x.firstFlagAt !== null);
+    out.real_traffic[name] = { requests: r.events, clients: r.subs.length, clients_ever_flagged: ever.length, clients_ever_flagged_pct: pct(ever.length, r.subs.length),
+      flagged_at_end: r.subs.filter((x) => x.last !== 'allow').length, first_decisions: ever.map((x) => x.firstDecision),
+      microseconds_per_request: round((ms * 1000) / r.events, 1) };
+  }
+  for (const tool of ['acunetix', 'netsparker', 'w3af']) {
+    const r = replay(clean(await load(`ocatak_${tool}.txt`))), main = r.subs.sort((x, y) => y.requests - x.requests)[0];
+    const acted = r.subs.reduce((a, x) => a + x.after, 0);
+    out.scanners[tool] = { requests: r.events, main_client_requests: main.requests, first_flag_at_request: main.firstFlagAt, first_decision: main.firstDecision,
+      final_decision: main.last, requests_after_first_flag_pct: pct(acted, r.events) };
+  }
+  return out;
+}
+
 const results = { generated_at: new Date().toISOString(), engine_defaults: { rpmHigh: DEFAULT_CONFIG.rpmHigh, scraperSlow: DEFAULT_CONFIG.scraperSlow, budgetUsd: DEFAULT_CONFIG.budgetUsd },
-  e1_user_agent_classification: await e1(), e2_real_nginx_traffic: await e2(), e2b_real_website_traffic: await e2('apache_logs'), e3_labelled_scanners: await e3(), e4_llm_cost_traces: await e4() };
+  e1_user_agent_classification: await e1(), e2_real_nginx_traffic: await e2(), e2b_real_website_traffic: await e2('apache_logs'), e3_labelled_scanners: await e3(), e4_llm_cost_traces: await e4(), e5_live_replay: await e5() };
 writeFileSync(new URL('./results.json', import.meta.url), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 1));

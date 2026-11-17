@@ -1,7 +1,7 @@
 # Scorecard
 
 Where the product stands against the plan in "Our Product, Start to Now: Knowing Who Is Visiting" (17 Nov 2026),
-part by part, with the measurement behind each claim. Updated 2026-11-17, decision spec 1.2.0.
+part by part, with the measurement behind each claim. Updated 2026-11-17, decision spec 1.2.0, package 0.4.0.
 
 Status words: **Built** = in this repository and tested. **Partial** = some of it built. **Slot** = the place to
 plug it in exists, the thing itself does not. **Not built**.
@@ -22,8 +22,8 @@ Evidence words: **Public data** = run on real, public datasets (VALIDATION.md). 
 |---|---|---|---|---|
 | 1 | Network | Slot | Accepts `network.proxy` and `network.shared_env` signals from an IP-data provider; collects nothing itself | Synthetic: shared-network users blocked or slowed 0%, asked for a step 2.45% |
 | 2 | Connection type | Partial | User-agent structure; the contradiction "says browser, loads no assets". No TLS or header fingerprint | Public data: 96.9% of 2,125 crawler user-agents seen as automation; 100% of 100 browsers. Contradiction fired on 3 of 1,314 real browser clients (0.2%) and on 2 of 3 scanners |
-| 3 | Patterns | Built (from logs) | Numbered-path enumeration, trap links, robots.txt violations, unchanged re-fetch, asset loading | Public data: real traffic flagged 0 of 2,797 and 1 of 1,862 clients. Enumeration and trap links: tests only |
-| 4 | Frequency | Built (from logs) | Peak requests per minute; machine-regular spacing at volume | Public data: 98.0% of labelled scanner requests came from flagged clients. Even spacing: tests only |
+| 3 | Patterns | Built (logs and live) | Numbered-path enumeration, trap links, robots.txt violations, unchanged re-fetch, asset loading | Public data: real traffic flagged 0 of 2,797 and 1 of 1,862 clients. Enumeration and trap links: tests only |
+| 4 | Frequency | Built (logs and live) | Peak requests per minute; machine-regular spacing at volume | Public data: 98.0% of labelled scanner requests came from flagged clients. Even spacing: tests only |
 | 5 | Time window | Built | Budget windows; round-the-clock activity at volume; error ratio with rate | Public data: error ratio moved 2 of 3 scanners from unclear to slowed. Round-the-clock: tests only |
 | 6 | Browser and device | Not built | Needs a script on the customer's page | - |
 | 7 | Behaviour | Not built | In the separate prototype, not here | - |
@@ -32,8 +32,15 @@ Evidence words: **Public data** = run on real, public datasets (VALIDATION.md). 
 | 10 | Usage and cost | Partial | Cost per subject and per cluster, fair-share units, key fan-out. "Same prompts from different users" and "use all then vanish" are not built | Public data (real LLM request sizes, invented identities): per-key budget caught 0-3.7% of farm cost, cluster budget 100% |
 | 11 | Declared bots and agents | Partial | Recognises declared crawlers and agents; accepts a verified-identity signal. No verifier (reverse DNS, signed requests) is built | Public data: as layer 2 |
 
-Layers 1 to 5 work from uploaded logs. **They do not yet work on live traffic**: the service scores what the
-caller sends and does not compute request rates or patterns from the request stream itself.
+Layers 2 to 5 work from uploaded logs **and on live traffic** (since 0.4.0). The service keeps running statistics
+per subject and works out rate, pattern and timing itself from the requests it is told about; the Node middleware
+reports them automatically. Live replay of the public logs (VALIDATION.md E5): the three scanners were first
+flagged at request 120, 120 and 151, so 93-98% of their requests arrived after the flag; no client on either real
+site was flagged at any point; about 10 microseconds per request.
+
+Limits of the live path: statistics live in one process's memory (several instances each see only their share,
+and a restart forgets them); a subject silent for an hour starts fresh, so a scraper that pauses for an hour
+between bursts is judged per burst; layer 1 still needs an outside IP-data provider.
 
 ## B. Scoring
 
@@ -94,7 +101,7 @@ data**, a company cannot run two at once, and `attack_defence` has no password-g
 | Connection | Status | Note |
 |---|---|---|
 | Upload logs | Built | CLI and API; the file is loaded into memory |
-| Traffic hook | Partial | Node middleware only; live layers 1 to 5 are not computed (see A) |
+| Traffic hook | Built for Node | Middleware reports requests and responses; live layers 2 to 5 computed by the service. Other languages and edge workers: not built |
 | Page snippet | Not built | - |
 | Usage feed | Built | Usage, link, signup and conversion events |
 
@@ -102,9 +109,9 @@ data**, a company cannot run two at once, and `attack_defence` has no password-g
 
 | Measure | Value |
 |---|---|
-| Tests | 126 (125 pass, 1 needs a database and passes on PostgreSQL 16) |
+| Tests | 134 (133 pass, 1 needs a database and passes on PostgreSQL 16) |
 | Golden vectors | 75 |
-| Decision time | 0.002 ms in process; 5.8 ms at the 99th percentile over local HTTP |
+| Decision time | 0.002 ms in process; 5.8 ms at the 99th percentile over local HTTP; live feature update about 0.01 ms per request |
 | Log audit speed | 51,462 lines in about 0.3 s |
 | Store | Memory and PostgreSQL 16 pass the same contract |
 | Never run | Docker image; CI on macOS, Windows, Node 24, PostgreSQL 14 and 17 |
@@ -121,8 +128,8 @@ data**, a company cannot run two at once, and `attack_defence` has no password-g
 
 1. **Stop adding features and talk to buyers.** The plan's own gate is 25 conversations and a few free log
    reports before building more. The log report works today; this is the cheapest test of whether anyone cares.
-2. **Compute layers 1 to 5 on live traffic.** It is the largest gap between the plan and the product: today a
-   company gets pattern detection only from uploaded logs.
+2. ~~Compute layers 2 to 5 on live traffic.~~ Done in 0.4.0. What remains is sharing that state across several
+   service instances (Redis or the store) and porting the middleware to other languages and the edge.
 3. **Bring the live-check prototype into this repository** behind the `human_check` rung, then test it on real
    people (mouse, trackpad, phone, older users, assistive tools).
 4. **Get labelled farm data.** Allow the blocked dataset hosts, or use the first pilot's data.

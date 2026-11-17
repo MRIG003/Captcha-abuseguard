@@ -116,11 +116,25 @@ export function createClient(options) {
    */
   function middleware(identify, hooks = {}) {
     return async (req, res, next) => {
-      let verdict = null;
+      let verdict = null, seen = null;
+      const started = Date.now();
       try {
         const input = await identify(req);
-        if (input?.subject) verdict = await assess(baseUrl, input, { timeoutMs, failMode, apiKey });
+        if (input?.subject) {
+          // Tell the service about this request so it can work out rate and pattern signals on live traffic.
+          const request = input.request ?? { path: String(req.url ?? req.path ?? '/'), ua: String(req.headers?.['user-agent'] ?? '') };
+          seen = { subject: input.subject, path: request.path };
+          verdict = await assess(baseUrl, { ...input, request }, { timeoutMs, failMode, apiKey });
+        }
       } catch { verdict = null; }
+      // When the request goes on to the app, report how it ended (status, size, time). Our own refusals are not reported.
+      const pass = () => {
+        if (seen && hooks.reportResponses !== false) {
+          res.on?.('finish', () => track({ type: 'response', subject: seen.subject, response: { path: seen.path, status: res.statusCode,
+            bytes: Number(res.getHeader?.('content-length')) || 0, rt: (Date.now() - started) / 1000 } }));
+        }
+        return next();
+      };
       if (verdict && !verdict.error) {
         req.abuseguard = verdict;
         res.setHeader('AG-Decision', `${verdict.decision}; class=${verdict.class}; enforced=${verdict.enforced}`);
@@ -129,11 +143,11 @@ export function createClient(options) {
         const conditional = req.headers?.['if-none-match'] || req.headers?.['if-modified-since'];
         if (verdict.action.mode === 'cached' && conditional) { res.statusCode = 304; return res.end(); }
         const key = `${verdict.subject?.kind}:${verdict.subject?.id}`;
-        if (verdict.action.mode !== 'retry_after' && takeToken(key, verdict.action.rpm ?? 30)) return next();
+        if (verdict.action.mode !== 'retry_after' && takeToken(key, verdict.action.rpm ?? 30)) return pass();
       }
       if (verdict?.enforced && verdict.decision === 'step_up' && hooks.onStepUp) return hooks.onStepUp(req, res, verdict);
       const out = toHttp(verdict);
-      if (!out) return next();
+      if (!out) return pass();
       res.statusCode = out.status;
       for (const [name, value] of Object.entries(out.headers)) res.setHeader(name, value);
       if (out.body) res.setHeader('content-type', 'application/json');

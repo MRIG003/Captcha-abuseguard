@@ -3,6 +3,7 @@
 import { createServer } from 'node:http';
 import { loadConfig, createMemoryStore, createPostgresStore } from '../src/index.js';
 import { createApp } from './app.js';
+import { createLiveTracker } from './liveTracker.js';
 
 const env = process.env;
 const log = (level, msg, extra = {}) => console.log(JSON.stringify({ level, msg, ...extra }));
@@ -26,7 +27,8 @@ if (!env.AG_API_KEYS) {
   process.exit(1);
 }
 const store = await makeStore();
-const app = createApp({ store, config: loadConfig(env), apiKeys: env.AG_API_KEYS, allowPrivateWebhooks: env.AG_WEBHOOK_ALLOW_PRIVATE === '1' });
+const app = createApp({ store, config: loadConfig(env), apiKeys: env.AG_API_KEYS, allowPrivateWebhooks: env.AG_WEBHOOK_ALLOW_PRIVATE === '1',
+  tracker: createLiveTracker({ maxSubjects: Number(env.AG_LIVE_MAX_SUBJECTS ?? 100000), idleMs: Number(env.AG_LIVE_IDLE_S ?? 3600) * 1000 }) });
 const server = createServer(app);
 server.requestTimeout = 30_000;
 server.headersTimeout = 10_000;

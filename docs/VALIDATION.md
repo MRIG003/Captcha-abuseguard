@@ -131,6 +131,29 @@ What it shows: with realistic request sizes, a farm that splits its usage stays 
 operator would plausibly set, and the cluster budget costs ordinary users nothing extra. What it does not show:
 that the links can be found. They were supplied. The 100% is the best case.
 
+## E5. Live replay: how early does it react?
+
+The same public logs, fed one request at a time in time order through the live tracker the service uses, with a
+decision taken at every request. This is stricter than E2 and E3, which judge a whole log at the end.
+
+| Scanner | Requests | First flagged at request | First response | Requests arriving after the first flag |
+|---|---|---|---|---|
+| Acunetix | 6,538 | 120 | check requested, then slowed | 98.1% |
+| Netsparker | 7,314 | 120 | slowed | 95.3% |
+| w3af | 3,996 | 151 | slowed | 92.9% |
+
+| Real site | Requests | Clients | Clients flagged at any point |
+|---|---|---|---|
+| Download server (nginx) | 51,462 | 2,797 | 0 |
+| Personal website (Apache) | 10,000 | 1,862 | 0 |
+
+- The first flag comes when the client reaches 120 requests in one minute, which is the rate threshold. A scanner
+  that stayed under that rate would not be flagged this way.
+- The one website client flagged in the end-of-log run (E2b) is not flagged live: its requests are spread over
+  days and the live tracker starts a subject fresh after an hour of silence.
+- Cost of the live bookkeeping: about 10 microseconds per request on this machine.
+- Not shown: behaviour with several service instances, where each sees only part of a client's traffic.
+
 ## Not validated, and why
 
 | Claim | What is needed | Why it was not run |

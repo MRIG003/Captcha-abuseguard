@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- Subject model: kind + hashed id. subject_key = kind || ':' || id.
 CREATE TABLE IF NOT EXISTS subjects (
-  tenant_id   text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id   text NOT NULL,                             -- no FK: a tenants row exists only once a policy is saved
   subject_key text NOT NULL,
   kind        text NOT NULL CHECK (kind IN ('account','api_key','session','device_cluster','payment_instrument')),
   attrs       jsonb NOT NULL DEFAULT '{}'::jsonb,       -- plan, paying, email_confirmed, passkey, card_on_file, converted

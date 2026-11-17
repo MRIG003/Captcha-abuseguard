@@ -3,11 +3,26 @@
 Ordered. Each task is sized for one session of a mid-tier model. Read `CONTEXT.md` first. Every task ends with
 `npm test` green and no change to existing golden-vector outcomes unless the task says so.
 
-## Not finished in this run
+## Status (second run, 2026-11-17)
 
-- Postgres adapter is written but was never run against a database (T05).
-- No HTTP service exists beyond the test mock (T01).
-- No SDK, edge adapter, signal-provider adapter or credential adapter exists (T03, T06, T07, T09).
+|Task|State|What is left|
+|-|-|-|
+|T00|Done for one page per vendor|Pricing pages; repeat quarterly|
+|T01|Done (`service/`, `test/service.test.js`)|`AG_CONFORMANCE_URL` run against a deployed instance|
+|T02|Done (`clusterUsage` in both adapters)|-|
+|T03|Done for the client and Connect-style middleware (`sdk/node/`)|Next.js and Fastify wrappers, keep-alive agent, npm packaging|
+|T04|Files written (`Dockerfile`, `compose.yaml`, `service/migrate.js`)|**Never built or run**: build, check image size, run `/readyz`|
+|T05|Adapter passes the contract on live PostgreSQL 16|Versions 14 and 17 in CI, batched purge, pool tuning under load|
+|T08|CLI done (`scripts/audit.js`)|Streaming, gzip, CDN field mappings, rotating-client clustering|
+|T06, T07, T09-T15|Not started|Everything|
+
+Known gaps in what was built:
+
+- Pushed signals (`/v1/signals`) and audit reports are kept in process memory, not in the store.
+- `signups_per_hour` is not derived from events; the caller must supply it.
+- Webhooks, agent passes and signal-provider management answer 501.
+- Audit by URL (`AuditRequest.source.url`) answers 501; post the log lines instead.
+- `src/` is 718 lines against the original "about 700" cap after adding cluster usage, outcomes and policy to the stores.
 - T00 is done for one page per vendor; pricing pages and remaining U cells are still unread.
 
 ## T00 Verify the competitor gap (done 2026-11-17 for one page per vendor; repeat quarterly)

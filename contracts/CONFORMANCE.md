@@ -16,7 +16,7 @@ contract; prose elsewhere is commentary.
 | C7 | 4xx are RFC 9457 problem documents with `type`, `title`, `status`; clients surface them and do not fall back. | `C7` |
 | C8 | Shadow mode returns the real decision with `enforced: false`. | `C8` |
 | C9 | Identifiers are HMAC-SHA256 hashed with the tenant salt before leaving the customer process (`hashId` test vector: salt `audit`, value `sk_live_abc`). | `test/logAnalyzer.test.js` |
-| C10 | Store adapters pass `storeContract` in `test/store.test.js`. | memory: yes; Postgres: not yet against a live database |
+| C10 | Store adapters pass `storeContract` in `test/helpers.js`. | memory: yes; Postgres: yes on 16 (`test/store.pg.test.js`) |
 
 ## Running
 

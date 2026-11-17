@@ -13,11 +13,11 @@ running; **planned** = backlog task, nothing built.
 
 Windows risk: the test glob is quoted for `cmd.exe`; log files with CRLF are handled by `readline` (`crlfDelay`).
 
-## Customer backends (thin SDKs, all planned)
+## Customer backends (thin SDKs; Node built, others planned)
 
 | Language | Adapter | Integration targets | Main risk |
 |----------|---------|---------------------|-----------|
-| Node/TS | `sdk/node`: `assess()`, Express/Fastify/Next middleware | Vercel, Supabase Edge Functions, Auth0 Actions, Stripe webhooks | Serverless cold starts eat the 150 ms deadline; keep-alive agent needed. |
+| Node/TS (**built**, Connect-style middleware) | `sdk/node`: `assess()`, `track()`, middleware | Vercel, Supabase Edge Functions, Auth0 Actions, Stripe webhooks | Serverless cold starts eat the 150 ms deadline; keep-alive agent needed. |
 | Python | `sdk/python`: ASGI/WSGI middleware | FastAPI, Django, LiteLLM callback | Sync frameworks block on the call; use a thread pool with a hard deadline. |
 | Go | `sdk/go`: `net/http` middleware | Kubernetes services, API gateways | None specific. |
 | Ruby | `sdk/ruby`: Rack middleware | Rails | Default `Net::HTTP` timeouts are coarse; set open and read timeouts separately. |
@@ -42,10 +42,10 @@ Slow actions should run at the edge where possible: a 429 or cached reply at the
 
 | Target | Status | Notes |
 |--------|--------|-------|
-| Docker / compose (service + Postgres) | planned (T04) | 12-factor: config only from `AG_*` env vars, logs to stdout, stateless process. |
+| Docker / compose (service + Postgres) | files written, **not built or run** | 12-factor: config only from `AG_*` env vars, logs to stdout, stateless process. |
 | AWS (ECS, Lambda), GCP (Cloud Run), Azure (Container Apps) | planned | Postgres 14+ managed service; Lambda needs a connection pooler. |
 | Render, Fly.io, Railway, Heroku-style hosts | planned | Single container plus managed Postgres. |
-| Postgres 14-17 | adapter written, **not run against a live database** | T05 runs `storeContract` against real Postgres in CI. |
+| Postgres 16 | **ran**: adapter contract and a service smoke test on 16.15 | 14 and 17 are covered by CI only. |
 | In-memory store | ran | Single process only; for shadow runs and tests. |
 
 ## Integration targets

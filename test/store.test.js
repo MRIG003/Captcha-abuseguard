@@ -1,54 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { STORE_METHODS, assertStore, createMemoryStore, createPostgresStore, decide } from '../src/index.js';
+import { storeContract } from './helpers.js';
 
-/** Adapter contract. Any new store adapter must pass this with its own factory. */
-export async function storeContract(makeStore) {
-  let clock = 1_000_000;
-  const store = makeStore(() => clock);
-  const a = { kind: 'account', id: 'a' }, b = { kind: 'account', id: 'b' }, c = { kind: 'account', id: 'c' };
-  for (const s of [a, b, c]) await store.upsertSubject('t1', s, { plan: 'free' });
-  await store.linkAttribute('t1', a, 'device', 'dev1');
-  await store.linkAttribute('t1', b, 'device', 'dev1');
-  await store.linkAttribute('t1', c, 'device', 'dev2');
-  await store.linkAttribute('t2', c, 'device', 'dev1');
-  assert.equal(await store.clusterSize('t1', a, 'device'), 2);
-  assert.equal(await store.clusterSize('t1', c, 'device'), 1);
-  assert.equal(await store.clusterSize('t1', a, 'payment'), 1);
-
-  await store.addUsage('t1', a, 0, { requests: 2, cost_usd: 1.5 });
-  assert.deepEqual(await store.addUsage('t1', a, 0, { requests: 1, cost_usd: 0.5 }), { requests: 3, cost_usd: 2 });
-  assert.deepEqual(await store.getUsage('t1', b, 0), { requests: 0, cost_usd: 0 });
-  await store.addUsage('t1', b, 0, { requests: 4, cost_usd: 2 });
-  await store.addUsage('t1', c, 0, { requests: 9, cost_usd: 9 });
-  assert.deepEqual(await store.clusterUsage('t1', a, 0, ['device', 'payment']), { requests: 7, cost_usd: 4 }, 'cluster cost is the sum over linked subjects');
-  assert.deepEqual(await store.clusterUsage('t1', c, 0, ['device']), { requests: 9, cost_usd: 9 });
-  assert.equal((await store.getSubject('t1', a)).attrs.plan, 'free');
-  assert.equal(await store.getSubject('t1', { kind: 'account', id: 'zz' }), null);
-  assert.equal(await store.getPolicy('t1'), null);
-  await store.putPolicy('t1', { mode: 'enforce', budget_usd: 3 });
-  assert.equal((await store.getPolicy('t1')).budget_usd, 3);
-
-  const verdict = decide({ subject: a, behavior: { device_cluster: 40, disposable_email: true, signups_per_hour: 20 } });
-  const id = await store.saveDecision('t1', verdict);
-  assert.equal((await store.getDecision('t1', id)).class, 'likely_farm');
-  assert.equal(await store.getDecision('t2', id), null, 'tenants are isolated');
-  await assert.rejects(store.saveAppeal('t2', id, {}));
-  const appeal = await store.saveAppeal('t1', id, { channel: 'api', note: 'shared lab machine' });
-  await store.resolveAppeal('t1', appeal, 'overturned');
-  await assert.rejects(store.saveOutcome('t2', id, 'abusive'));
-  await store.saveOutcome('t1', id, 'abusive');
-  assert.deepEqual(await store.accuracy('t1'), { decisions: 1, non_allow: 1, appeals: 1, overturned: 1, labelled: 1, labelled_abusive: 1 });
-
-  clock += 10_000;
-  assert.equal(await store.purge('t1', 60_000), 0);
-  assert.ok((await store.purge('t1', 5_000)) >= 2);
-  assert.equal(await store.getDecision('t1', id), null);
-
-  await store.eraseSubject('t1', a);
-  assert.equal(await store.clusterSize('t1', b, 'device'), 1);
-  await store.close();
-}
 
 test('memory store passes the adapter contract', () => storeContract(createMemoryStore));
 

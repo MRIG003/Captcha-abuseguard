@@ -41,7 +41,7 @@ export function createMemoryStore(now = () => Date.now()) {
       return total;
     },
     async addUsage(tenant, subject, windowStart, delta) {
-      const key = `${sk(tenant, subject)}|${windowStart}`, cur = usage.get(key) ?? { requests: 0, cost_usd: 0, at: now() };
+      const key = `${sk(tenant, subject)}|${windowStart}`, cur = usage.get(key) ?? { requests: 0, cost_usd: 0, at: windowStart };
       cur.requests += delta.requests ?? 0; cur.cost_usd += delta.cost_usd ?? 0;
       usage.set(key, cur);
       return { requests: cur.requests, cost_usd: cur.cost_usd };

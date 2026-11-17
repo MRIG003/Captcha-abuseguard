@@ -1,0 +1,29 @@
+# Local stack: service + Postgres. Set AG_API_KEYS in a .env file first, e.g. AG_API_KEYS=acme:change-me
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ag-local-only}
+      POSTGRES_DB: abuseguard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ag -d abuseguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  abuseguard:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ag:${POSTGRES_PASSWORD:-ag-local-only}@db:5432/abuseguard
+      AG_API_KEYS: ${AG_API_KEYS:?set AG_API_KEYS, for example acme:a-long-random-key}
+      AG_MODE: ${AG_MODE:-shadow}
+      AG_BUDGET_USD: ${AG_BUDGET_USD:-5}
+    ports:
+      - "8787:8787"
+volumes:
+  pgdata:

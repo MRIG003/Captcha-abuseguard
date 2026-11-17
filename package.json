@@ -5,12 +5,25 @@
   "type": "module",
   "license": "UNLICENSED",
   "private": true,
-  "engines": { "node": ">=22" },
-  "exports": { ".": "./src/index.js" },
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
-    "demo": "node scripts/demo.js"
+    "demo": "node scripts/demo.js",
+    "start": "node service/server.js",
+    "migrate": "node service/migrate.js",
+    "audit": "node scripts/audit.js"
   },
-  "peerDependencies": { "pg": ">=8" },
-  "peerDependenciesMeta": { "pg": { "optional": true } }
+  "peerDependencies": {
+    "pg": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
+  }
 }

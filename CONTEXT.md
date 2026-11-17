@@ -103,6 +103,9 @@ used only by the Postgres adapter.
   Use better / parity / behind per function and say so when behind.
 - Documentation states what was run. Anything not executed is labelled as such.
 - Document caps are hard and enforced in CI (`caps` job).
+- After every round of work, update the build map page (https://claude.ai/artifact/EKnZ8K3SABAV2Ssn6NoMzR): the
+  "In simple words" section in plain English and the technical sections (run log, status, validation). Standing
+  request from the owner, 2026-11-17.
 
 ## Definition of done (every task)
 

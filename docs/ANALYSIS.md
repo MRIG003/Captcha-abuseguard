@@ -7,10 +7,11 @@
 |Require a card at signup plus Stripe Radar|Conversion loss (size ASSUMED); Stripe says blocking virtual cards now rejects real users|Card-first products; no API-only signup|
 |Shrink or remove the free tier|Slower acquisition|Product sells top-down|
 |Per-key gateway budget (LiteLLM, Cloudflare)|None; already owned|Abuse is single heavy keys, not many keys|
+|Glue: pass a detector's linked-account id (Radar, Verisoul) as the gateway budget key|1 to 3 days (ASSUMED) plus upkeep|Cost is LLM spend only and both tools are already owned|
 |In-house job: group usage by device hash, cap the group|2 to 4 engineer-weeks (ASSUMED) plus upkeep|Team already stores device identifiers|
 |Phone or ID verification|Friction, regional bias, privacy exposure|High-value accounts only|
 
-Plain reading: for a card-first company, Radar plus a gateway budget is enough and we should not sell to it. Our buyer is the API-first company with cardless signup and a cost per request high enough to matter.
+Plain reading: Radar evaluates signups without a card, so "cardless" is not our opening. A company that owns a detector and an LLM gateway can glue them. Our buyer has high cost per request, cost outside LLM calls or no gateway, and no wish to maintain the glue.
 
 ## 2. Segment fit
 
@@ -51,7 +52,7 @@ Any one of these makes the wedge a feature. Check quarterly.
 |$2-3 infrastructure cost per fake trial|One anecdote|Ask five founders for cost per free signup|
 |22B scrapes; over 50% re-fetch unchanged|Vendor-reported|Measure re-fetch share in pilot logs|
 |19% abandon over CAPTCHAs|Vendor-cited survey|Not needed; we add no CAPTCHA|
-|API signups are mostly cardless|ASSUMED|Check signup flows of 30 target companies|
+|Glue takes 1-3 days|ASSUMED|Build it once against Verisoul plus LiteLLM|
 |In-house fix takes 2-4 weeks|ASSUMED|Ask three platform engineers|
 |3,000-6,000 companies at $20K-$80K|ASSUMED|Count companies with a public free API tier in one directory|
 |Synthetic proof results|Invented populations|Shadow pilot with labelled sample|
@@ -67,13 +68,14 @@ Serviceable market = companies x annual contract value.
 |Contract value|$20K|$40K|$80K|
 |Market|$60M|$180M|$480M|
 
-Obtainable revenue = companies x share with cardless signup x share reachable x win rate x price. At the tested $1,500/month the price is $18K, below the low contract value. With ASSUMED 50% cardless, 20% reachable, 10% win rate: 4,500 x 0.5 x 0.2 x 0.1 x $18K = $0.8M a year.
+Obtainable revenue = companies x share not served by the glue x share reachable x win rate x price. At the tested $1,500/month the price is $18K, below the low contract value. With ASSUMED 50% not served, 20% reachable, 10% win rate: 4,500 x 0.5 x 0.2 x 0.1 x $18K = $0.8M a year.
 
-Most sensitive input: contract value (4x range against 2x for company count). Second: the cardless share, which gates everything.
+Most sensitive input: contract value (4x range against 2x for company count). Second: the share not served by the glue, which gates everything.
 
 ## 8. Kill criteria
 
-- T00 finds a mainstream tool with cluster-level dollar caps.
+- A mainstream tool ships cluster-level dollar caps (T00 found none on the pages read).
+- Five of ten buyers say they would glue a detector to their gateway instead.
 - Three pilot audits each show under 5% of free-tier cost in linked clusters.
 - Under 3 of 15 qualified buyers accept a free audit.
 - Shadow pilots flag over 1% of paying users after tuning.
@@ -83,7 +85,7 @@ Most sensitive input: contract value (4x range against 2x for company count). Se
 
 |Risk|Experiment|
 |-|-|
-|The gap is not real|T00: read competitor docs fully; one day|
+|The gap is a glue job|Build the glue in a day; show both to five buyers and ask which they would run|
 |Bundling by Stripe or Cloudflare|Ask ten buyers whether they would still buy if Radar showed this number|
 |Linking too weak without a fingerprint vendor|Run the audit on one pilot's logs plus its device ids; measure farm cost found with and without|
 |In-house substitute|Offer the audit free; count how many build it themselves within 30 days|
@@ -91,7 +93,7 @@ Most sensitive input: contract value (4x range against 2x for company count). Se
 
 ## 10. Not verified in this run
 
-- Full vendor pages; only search excerpts were read, so every Unknown cell may hide a feature.
+- Vendor docs beyond one page each; N and U cells may hide a feature.
 - Pricing of any competitor.
 - The Postgres adapter against a database; CI on macOS, Windows and Node 24.
 - Any real traffic. All accuracy figures are synthetic.

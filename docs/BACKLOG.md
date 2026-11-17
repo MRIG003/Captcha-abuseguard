@@ -8,9 +8,9 @@ Ordered. Each task is sized for one session of a mid-tier model. Read `CONTEXT.m
 - Postgres adapter is written but was never run against a database (T05).
 - No HTTP service exists beyond the test mock (T01).
 - No SDK, edge adapter, signal-provider adapter or credential adapter exists (T03, T06, T07, T09).
-- "Better" cells in GAP-ANALYSIS.md rest on Unknown competitor cells (T00).
+- T00 is done for one page per vendor; pricing pages and remaining U cells are still unread.
 
-## T00 Verify the competitor gap (human or model with web access, 1 hour)
+## T00 Verify the competitor gap (done 2026-11-17 for one page per vendor; repeat quarterly)
 
 - Inputs: `docs/GAP-ANALYSIS.md` matrix and sources.
 - Files: `docs/GAP-ANALYSIS.md` only.

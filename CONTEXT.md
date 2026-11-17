@@ -12,8 +12,9 @@ subject cluster; cap the cluster's dollars on expensive endpoints; explain every
 The entry point is a free bot load and cost audit from server or CDN logs, in shadow mode.
 
 Why this and not the original brief (a general decision layer): per-identifier dollar budgets already ship in
-LiteLLM and Cloudflare AI Gateway, and signup-abuse detection is bundled in Stripe Radar. What was not found in any
-tool is a budget that follows the person across identifiers. Evidence, scores and the honest limits of that claim:
+LiteLLM and Cloudflare AI Gateway, and signup-abuse detection is bundled in Stripe Radar (no card needed). What was
+not found in any single tool is a budget that follows the person across identifiers; a customer can approximate it
+by gluing a detector to a gateway. Evidence, scores and the honest limits of that claim:
 `docs/GAP-ANALYSIS.md`. Follow-up wedge: appeals and published per-customer accuracy.
 
 Buyer: head of growth or platform at a Series A-C AI/API company with a self-serve free tier.
@@ -104,7 +105,7 @@ used only by the Postgres adapter.
 
 ## Known weak points to keep honest about
 
-- "Better" on cluster budgets, appeals and log audit rests on Unknown competitor cells, not Verified absence (T00).
+- "Better" on cluster budgets holds only as one integrated product; appeals and log audit rest on one page read per vendor.
 - Accuracy numbers are from invented synthetic populations.
 - Linking quality bounds the product; farms with no shared device, card or provider signal look like separate users.
 - The assistive declaration is self-asserted.

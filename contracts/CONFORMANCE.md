@@ -7,7 +7,7 @@ contract; prose elsewhere is commentary.
 
 | ID | Requirement | Reference test |
 |----|-------------|----------------|
-| C1 | Response shape matches `openapi.yaml#Verdict`: enums, `recovery` non-null unless `allow`, `effective_decision = allow` when not enforced, every reason code registered. | `assertShape` |
+| C1 | Response shape matches `openapi.yaml#Verdict`: enums, `recovery` non-null unless `allow`, `effective_decision = allow` when not enforced, every reason code registered. | `assertShape` in `test/helpers.js` |
 | C2 | Decision parity: for every vector in `golden-vectors.json`, `class`, `decision`, `reasons_include`, and where present `step`, `slow_mode`, `enforced`, `effective_decision`, `recovery_includes` match. | `C1+C2` |
 | C3 | Timeout: the client enforces its own deadline (default 150 ms) and fails open to `allow` with reason `ENGINE_UNAVAILABLE`, `enforced: false`. It never throws into the caller. | `C3` |
 | C4 | Fail-closed (opt-in per surface) degrades to `step_up` with `manual_review` in `alternatives`. A fallback is never `block`, `limit` or `slow`. | `C4` |

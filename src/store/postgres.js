@@ -18,6 +18,10 @@ export function createPostgresStore(pool) {
       [tenant, subjectKey(subject), subject.kind, JSON.stringify(attrs)]);
       return `${tenant}|${subjectKey(subject)}`;
     },
+    async getSubject(tenant, subject) {
+      const rows = await q('SELECT kind, attrs, first_seen, last_seen FROM subjects WHERE tenant_id = $1 AND subject_key = $2', [tenant, subjectKey(subject)]);
+      return rows[0] ? { ...subject, ...rows[0] } : null;
+    },
     async linkAttribute(tenant, subject, type, valueHash) {
       await q(`INSERT INTO subject_links (tenant_id, link_type, value_hash, subject_key) VALUES ($1, $2, $3, $4)
         ON CONFLICT DO NOTHING`, [tenant, type, valueHash, subjectKey(subject)]);
@@ -39,6 +43,15 @@ export function createPostgresStore(pool) {
     async getUsage(tenant, subject, windowStart) {
       const rows = await q(`SELECT requests::float8 AS requests, cost_usd::float8 AS cost_usd FROM usage_windows
         WHERE tenant_id = $1 AND subject_key = $2 AND window_start = $3`, [tenant, subjectKey(subject), win(windowStart)]);
+      return rows[0] ?? { requests: 0, cost_usd: 0 };
+    },
+    async clusterUsage(tenant, subject, windowStart, types) {
+      const rows = await q(`SELECT coalesce(sum(u.requests), 0)::float8 AS requests, coalesce(sum(u.cost_usd), 0)::float8 AS cost_usd
+        FROM usage_windows u WHERE u.tenant_id = $1 AND u.window_start = $3 AND (u.subject_key = $2 OR u.subject_key IN (
+          SELECT b.subject_key FROM subject_links a JOIN subject_links b
+            ON b.tenant_id = a.tenant_id AND b.link_type = a.link_type AND b.value_hash = a.value_hash
+          WHERE a.tenant_id = $1 AND a.subject_key = $2 AND a.link_type = ANY($4)))`,
+      [tenant, subjectKey(subject), win(windowStart), types]);
       return rows[0] ?? { requests: 0, cost_usd: 0 };
     },
     async saveDecision(tenant, verdict) {
@@ -66,13 +79,31 @@ export function createPostgresStore(pool) {
         WHERE tenant_id = $1 AND id = $2 RETURNING id`, [tenant, appealId, outcome]);
       if (!rows.length) throw new Error('appeal not found');
     },
+    async saveOutcome(tenant, decisionId, label) {
+      const rows = await q(`INSERT INTO outcomes (tenant_id, decision_id, label) SELECT $1, d.id, $3 FROM decisions d
+        WHERE d.tenant_id = $1 AND d.id = $2 ON CONFLICT (tenant_id, decision_id) DO UPDATE SET label = EXCLUDED.label RETURNING label`,
+      [tenant, decisionId, label]);
+      if (!rows.length) throw new Error('decision not found');
+    },
     async accuracy(tenant) {
       const rows = await q(`SELECT
         (SELECT count(*)::int FROM decisions WHERE tenant_id = $1) AS decisions,
         (SELECT count(*)::int FROM decisions WHERE tenant_id = $1 AND decision <> 'allow') AS non_allow,
         (SELECT count(*)::int FROM appeals WHERE tenant_id = $1) AS appeals,
-        (SELECT count(*)::int FROM appeals WHERE tenant_id = $1 AND outcome = 'overturned') AS overturned`, [tenant]);
+        (SELECT count(*)::int FROM appeals WHERE tenant_id = $1 AND outcome = 'overturned') AS overturned,
+        (SELECT count(*)::int FROM outcomes o JOIN decisions d ON d.id = o.decision_id
+          WHERE o.tenant_id = $1 AND d.decision <> 'allow') AS labelled,
+        (SELECT count(*)::int FROM outcomes o JOIN decisions d ON d.id = o.decision_id
+          WHERE o.tenant_id = $1 AND d.decision <> 'allow' AND o.label = 'abusive') AS labelled_abusive`, [tenant]);
       return rows[0];
+    },
+    async getPolicy(tenant) {
+      return (await q('SELECT policy FROM tenants WHERE id = $1', [tenant]))[0]?.policy ?? null;
+    },
+    async putPolicy(tenant, policy) {
+      await q(`INSERT INTO tenants (id, name, hash_salt_ref, policy) VALUES ($1, $1, 'env:AG_TENANT_SALT', $2)
+        ON CONFLICT (id) DO UPDATE SET policy = EXCLUDED.policy`, [tenant, JSON.stringify(policy)]);
+      return policy;
     },
     async purge(tenant, olderThanMs) {
       const cutoff = new Date(Date.now() - olderThanMs).toISOString();
@@ -83,11 +114,9 @@ export function createPostgresStore(pool) {
       return removed;
     },
     async eraseSubject(tenant, subject) {
-      for (const table of ['appeals_by_subject', 'decisions', 'usage_windows', 'signals', 'subject_links', 'subjects']) {
-        const text = table === 'appeals_by_subject'
-          ? 'DELETE FROM appeals WHERE tenant_id = $1 AND decision_id IN (SELECT id FROM decisions WHERE tenant_id = $1 AND subject_key = $2)'
-          : `DELETE FROM ${table} WHERE tenant_id = $1 AND subject_key = $2`;
-        await q(text, [tenant, subjectKey(subject)]);
+      // appeals and outcomes go with their decision (ON DELETE CASCADE)
+      for (const table of ['decisions', 'usage_windows', 'signals', 'subject_links', 'subjects']) {
+        await q(`DELETE FROM ${table} WHERE tenant_id = $1 AND subject_key = $2`, [tenant, subjectKey(subject)]);
       }
     },
     async close() { await pool.end?.(); },

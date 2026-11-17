@@ -4,8 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
-import { CLASSES, DECISIONS, SPEC_VERSION, REASON_TEXT } from '../../src/index.js';
-import { golden, assertVector } from '../golden.test.js';
+import { golden, assertVector, assertShape } from '../helpers.js';
 import { startMockServer } from './mockServer.js';
 
 const external = process.env.AG_CONFORMANCE_URL;
@@ -18,24 +17,6 @@ after(async () => { await server?.close(); });
 
 const farm = golden.vectors.find((v) => v.id === 'farm-01-device-cluster-large').input;
 
-/** C1: response shape. */
-export function assertShape(v) {
-  assert.equal(v.spec_version, SPEC_VERSION);
-  assert.ok(CLASSES.includes(v.class), `class ${v.class}`);
-  assert.ok(DECISIONS.includes(v.decision), `decision ${v.decision}`);
-  assert.ok(DECISIONS.includes(v.effective_decision));
-  assert.equal(typeof v.enforced, 'boolean');
-  assert.ok(typeof v.confidence === 'number' && v.confidence >= 0 && v.confidence <= 1);
-  assert.ok(Array.isArray(v.reasons) && v.reasons.length >= 1 && v.reasons.every((code) => code in REASON_TEXT));
-  for (const key of ['farm', 'scraper', 'legit', 'cost_ratio']) assert.equal(typeof v.scores[key], 'number');
-  assert.equal(typeof v.cost.attributed_usd, 'number');
-  if (v.decision === 'allow') assert.equal(v.recovery, null);
-  else {
-    assert.ok(v.action && typeof v.action.type === 'string');
-    assert.ok(v.recovery.appeal === true && v.recovery.paths.includes('appeal') && v.recovery.sla_hours > 0);
-  }
-  if (!v.enforced) assert.equal(v.effective_decision, 'allow');
-}
 
 test('C1+C2 shapes and decision parity on every golden vector over HTTP', async () => {
   for (const vector of golden.vectors) {

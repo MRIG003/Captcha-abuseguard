@@ -19,6 +19,15 @@ export async function storeContract(makeStore) {
   await store.addUsage('t1', a, 0, { requests: 2, cost_usd: 1.5 });
   assert.deepEqual(await store.addUsage('t1', a, 0, { requests: 1, cost_usd: 0.5 }), { requests: 3, cost_usd: 2 });
   assert.deepEqual(await store.getUsage('t1', b, 0), { requests: 0, cost_usd: 0 });
+  await store.addUsage('t1', b, 0, { requests: 4, cost_usd: 2 });
+  await store.addUsage('t1', c, 0, { requests: 9, cost_usd: 9 });
+  assert.deepEqual(await store.clusterUsage('t1', a, 0, ['device', 'payment']), { requests: 7, cost_usd: 4 }, 'cluster cost is the sum over linked subjects');
+  assert.deepEqual(await store.clusterUsage('t1', c, 0, ['device']), { requests: 9, cost_usd: 9 });
+  assert.equal((await store.getSubject('t1', a)).attrs.plan, 'free');
+  assert.equal(await store.getSubject('t1', { kind: 'account', id: 'zz' }), null);
+  assert.equal(await store.getPolicy('t1'), null);
+  await store.putPolicy('t1', { mode: 'enforce', budget_usd: 3 });
+  assert.equal((await store.getPolicy('t1')).budget_usd, 3);
 
   const verdict = decide({ subject: a, behavior: { device_cluster: 40, disposable_email: true, signups_per_hour: 20 } });
   const id = await store.saveDecision('t1', verdict);
@@ -27,7 +36,9 @@ export async function storeContract(makeStore) {
   await assert.rejects(store.saveAppeal('t2', id, {}));
   const appeal = await store.saveAppeal('t1', id, { channel: 'api', note: 'shared lab machine' });
   await store.resolveAppeal('t1', appeal, 'overturned');
-  assert.deepEqual(await store.accuracy('t1'), { decisions: 1, non_allow: 1, appeals: 1, overturned: 1 });
+  await assert.rejects(store.saveOutcome('t2', id, 'abusive'));
+  await store.saveOutcome('t1', id, 'abusive');
+  assert.deepEqual(await store.accuracy('t1'), { decisions: 1, non_allow: 1, appeals: 1, overturned: 1, labelled: 1, labelled_abusive: 1 });
 
   clock += 10_000;
   assert.equal(await store.purge('t1', 60_000), 0);
@@ -43,7 +54,7 @@ test('memory store passes the adapter contract', () => storeContract(createMemor
 
 test('assertStore rejects incomplete adapters', () => {
   assert.throws(() => assertStore({ upsertSubject() {} }), /missing/);
-  assert.equal(STORE_METHODS.length, 13);
+  assert.equal(STORE_METHODS.length, 18);
 });
 
 test('postgres adapter: statement shapes against a recording pool (no live database in this run)', async () => {

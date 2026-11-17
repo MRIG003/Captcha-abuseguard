@@ -1,0 +1,511 @@
+openapi: 3.1.0
+info:
+  title: abuseguard API
+  version: 1.0.0
+  summary: Traffic referee. Per-human cost budgets, explainable verdicts, governed agent lane, log audit.
+  description: |
+    Versioning: the path carries the major version (/v1). Every response carries `AG-Spec-Version`
+    (semver of the decision spec, see docs/DECISION-SPEC.md). Additive changes bump minor; any change to an
+    expected golden-vector outcome bumps major. Reason codes are append-only.
+    Errors: RFC 9457 problem documents. Auth: bearer API key per tenant; webhooks are HMAC-signed.
+    All identifiers sent to this API should already be hashed by the caller (SDKs do this with the tenant salt).
+servers:
+  - url: https://{host}
+    variables: { host: { default: localhost:8787 } }
+security:
+  - bearerAuth: []
+tags:
+  - name: decisions
+  - name: ingestion
+  - name: signals
+  - name: agents
+  - name: audit
+  - name: ops
+paths:
+  /v1/decisions:
+    post:
+      tags: [decisions]
+      operationId: assess
+      summary: Assess one subject and return an explained verdict.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AssessRequest' } } } }
+      responses:
+        '200': { description: Verdict, headers: { AG-Spec-Version: { $ref: '#/components/headers/SpecVersion' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Verdict' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /v1/decisions/{decision_id}:
+    get:
+      tags: [decisions]
+      operationId: getDecision
+      parameters: [{ $ref: '#/components/parameters/DecisionId' }]
+      responses:
+        '200': { description: Stored verdict, content: { application/json: { schema: { $ref: '#/components/schemas/Verdict' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/decisions/{decision_id}/explanation:
+    get:
+      tags: [decisions]
+      operationId: explainDecision
+      summary: Plain-language explanation suitable for showing to the affected person.
+      parameters: [{ $ref: '#/components/parameters/DecisionId' }]
+      responses:
+        '200': { description: Explanation, content: { application/json: { schema: { $ref: '#/components/schemas/Explanation' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/decisions/{decision_id}/appeal:
+    post:
+      tags: [decisions]
+      operationId: appealDecision
+      summary: File an appeal. Enforcement on the subject is relaxed to the lightest ladder rung until resolved.
+      parameters: [{ $ref: '#/components/parameters/DecisionId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AppealRequest' } } } }
+      responses:
+        '201': { description: Appeal filed, content: { application/json: { schema: { $ref: '#/components/schemas/Appeal' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/appeals/{appeal_id}:
+    patch:
+      tags: [decisions]
+      operationId: resolveAppeal
+      parameters: [{ name: appeal_id, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [outcome], properties: { outcome: { enum: [overturned, upheld] }, note: { type: string } } } } } }
+      responses:
+        '200': { description: Resolved, content: { application/json: { schema: { $ref: '#/components/schemas/Appeal' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/decisions/{decision_id}/outcome:
+    post:
+      tags: [decisions]
+      operationId: labelOutcome
+      summary: Ground-truth label (chargeback, converted, confirmed abuse) used for the accuracy report.
+      parameters: [{ $ref: '#/components/parameters/DecisionId' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [label], properties: { label: { enum: [abusive, legitimate, converted] }, source: { type: string } } } } } }
+      responses:
+        '204': { description: Recorded }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/events:
+    post:
+      tags: [ingestion]
+      operationId: ingestEvents
+      summary: Batch ingestion of usage and identity-link events (inline middleware and backfill use the same shape).
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [events], properties: { events: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/Event' } } } } } } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { type: object, properties: { accepted: { type: integer }, rejected: { type: integer } } } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+  /v1/subjects/{kind}/{id}:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { $ref: '#/components/schemas/SubjectKind' } }
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [decisions]
+      operationId: getSubject
+      summary: Current state - cluster sizes, cost attributed in the window, good traffic converted, last verdict.
+      responses:
+        '200': { description: Subject state, content: { application/json: { schema: { $ref: '#/components/schemas/SubjectState' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [decisions]
+      operationId: eraseSubject
+      summary: Erasure request (GDPR art. 17, CCPA, DPDP). Removes the subject, links, usage, signals and decisions.
+      responses:
+        '204': { description: Erased }
+  /v1/signals:
+    post:
+      tags: [signals]
+      operationId: pushSignals
+      summary: Push normalized signals from a provider adapter (async path; inline path is AssessRequest.signals).
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [subject, signals], properties: { subject: { $ref: '#/components/schemas/Subject' }, signals: { type: array, items: { $ref: '#/components/schemas/Signal' } } } } } } }
+      responses:
+        '202': { description: Accepted }
+        '400': { $ref: '#/components/responses/Problem' }
+  /v1/signal-providers:
+    get:
+      tags: [signals]
+      operationId: listSignalProviders
+      responses:
+        '200': { description: Providers and health, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SignalProvider' } } } } }
+  /v1/signal-providers/{name}:
+    put:
+      tags: [signals]
+      operationId: putSignalProvider
+      parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SignalProvider' } } } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/SignalProvider' } } } }
+  /v1/policy:
+    get:
+      tags: [decisions]
+      operationId: getPolicy
+      responses:
+        '200': { description: Tenant policy, content: { application/json: { schema: { $ref: '#/components/schemas/Policy' } } } }
+    put:
+      tags: [decisions]
+      operationId: putPolicy
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Policy' } } } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/Policy' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+  /v1/agent-policies/{agent_id}:
+    parameters: [{ name: agent_id, in: path, required: true, schema: { type: string }, description: 'Agent identifier, or `default`.' }]
+    get:
+      tags: [agents]
+      operationId: getAgentPolicy
+      responses:
+        '200': { description: Policy, content: { application/json: { schema: { $ref: '#/components/schemas/AgentPolicy' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [agents]
+      operationId: putAgentPolicy
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentPolicy' } } } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/AgentPolicy' } } } }
+  /v1/agent-passes:
+    post:
+      tags: [agents]
+      operationId: issueAgentPass
+      summary: Issue a short-TTL pass bound to one subject, one agent and one client key.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentPassRequest' } } } }
+      responses:
+        '201': { description: Pass, content: { application/json: { schema: { $ref: '#/components/schemas/AgentPass' } } } }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/agent-passes/verify:
+    post:
+      tags: [agents]
+      operationId: verifyAgentPass
+      summary: Verify a pass or an external credential through a credential adapter; returns an `agent.credential` signal.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [scheme, credential], properties: { scheme: { type: string, examples: [ag-pass, web-bot-auth] }, credential: { type: string }, request: { type: object, description: 'Method, authority, path and signature headers of the presented request.', additionalProperties: true } } } } } }
+      responses:
+        '200': { description: Normalized signal, content: { application/json: { schema: { $ref: '#/components/schemas/Signal' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+  /v1/agent-passes/{pass_id}:
+    delete:
+      tags: [agents]
+      operationId: revokeAgentPass
+      parameters: [{ name: pass_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Revoked }
+  /v1/audits:
+    post:
+      tags: [audit]
+      operationId: createAudit
+      summary: Start a bot load and cost audit from server or CDN logs. No enforcement, no integration.
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/AuditRequest' } }
+          application/x-ndjson: { schema: { type: string, description: 'Log lines (JSON lines or combined log format), optionally gzip-encoded.' } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Audit' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+  /v1/audits/{audit_id}:
+    get:
+      tags: [audit]
+      operationId: getAudit
+      parameters: [{ name: audit_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Audit status and report, content: { application/json: { schema: { $ref: '#/components/schemas/Audit' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/metrics/accuracy:
+    get:
+      tags: [ops]
+      operationId: getAccuracy
+      summary: Per-tenant precision, false-positive rate, appeal outcomes and dollars saved.
+      parameters: [{ name: window_days, in: query, schema: { type: integer, default: 30, minimum: 1, maximum: 365 } }]
+      responses:
+        '200': { description: Accuracy report, content: { application/json: { schema: { $ref: '#/components/schemas/AccuracyReport' } } } }
+  /v1/webhook-endpoints:
+    put:
+      tags: [ops]
+      operationId: putWebhookEndpoint
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [url, events], properties: { url: { type: string, format: uri }, events: { type: array, items: { $ref: '#/components/schemas/WebhookEventType' } } } } } } }
+      responses:
+        '200': { description: 'Saved. The signing secret is returned once.', content: { application/json: { schema: { type: object, properties: { url: { type: string }, secret: { type: string } } } } } }
+  /v1/version:
+    get:
+      tags: [ops]
+      operationId: getVersion
+      security: []
+      responses:
+        '200': { description: Versions, content: { application/json: { schema: { type: object, required: [api, spec_version], properties: { api: { type: string }, spec_version: { type: string }, build: { type: string } } } } } }
+  /healthz:
+    get:
+      tags: [ops]
+      operationId: liveness
+      security: []
+      responses:
+        '200': { description: Process is up, content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } } }
+  /readyz:
+    get:
+      tags: [ops]
+      operationId: readiness
+      security: []
+      responses:
+        '200': { description: Store reachable, content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } } }
+        '503': { $ref: '#/components/responses/Problem' }
+webhooks:
+  event:
+    post:
+      operationId: webhookEvent
+      summary: 'Signed delivery. Header `AG-Signature: t=<unix>,v1=<hex hmac-sha256 of "t.body">`; reject if older than 5 minutes. Retries with backoff for 24 h; `id` is the idempotency key.'
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WebhookEvent' } } } }
+      responses:
+        '2XX': { description: Acknowledged }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, description: 'Tenant API key. Keys are scoped: assess, ingest, admin.' }
+  headers:
+    SpecVersion: { schema: { type: string }, description: Decision spec version that produced the response. }
+  parameters:
+    DecisionId: { name: decision_id, in: path, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, maxLength: 128 } }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errors: { type: array, items: { type: object, properties: { pointer: { type: string }, detail: { type: string } } } }
+    SubjectKind: { enum: [account, api_key, session, device_cluster, payment_instrument] }
+    Subject:
+      type: object
+      required: [kind, id]
+      description: The thing being scored. Never assumed to be an account. `id` is a caller-side keyed hash.
+      properties:
+        kind: { $ref: '#/components/schemas/SubjectKind' }
+        id: { type: string, minLength: 1, maxLength: 128 }
+    Signal:
+      type: object
+      required: [type, value, confidence, freshness_s, provenance]
+      description: Normalized signal-provider contract. Unknown types are stored and ignored by the engine.
+      properties:
+        type: { type: string, examples: [risk.multi_account, network.shared_env, network.proxy, bot.verified, agent.credential, assistive.tool, human.liveness] }
+        value: { description: 'Number 0..1, string enum, boolean, or object (agent.credential: {scheme, agent_id, verified, user_bound}).' }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        freshness_s: { type: number, minimum: 0, description: Age of the observation in seconds. }
+        provenance: { type: string, description: 'Provider or adapter name, e.g. stripe_radar, adapter.web_bot_auth, self_declared.' }
+    Behavior:
+      type: object
+      description: Own observations over the policy window. All fields optional; missing means unknown, not zero risk.
+      properties:
+        device_cluster: { type: integer, description: Subjects sharing a device with this one (including itself). }
+        payment_cluster: { type: integer }
+        ip_cluster: { type: integer }
+        signups_per_hour: { type: number, description: Signup rate among linked subjects. }
+        disposable_email: { type: boolean }
+        email_confirmed: { type: boolean }
+        passkey: { type: boolean }
+        card_on_file: { type: boolean }
+        paying: { type: boolean }
+        tenure_days: { type: integer }
+        rpm: { type: number, description: Peak requests per minute. }
+        robots_violations: { type: integer }
+        refetch_unchanged: { type: number, minimum: 0, maximum: 1 }
+        key_fanout: { type: integer, description: Distinct client networks using one API key. }
+        ua: { enum: [browser, library, declared_bot, declared_agent, empty] }
+    Cost:
+      type: object
+      description: Dollars attributed to the subject (aggregated over its linked cluster when links exist) in the window.
+      properties:
+        usd: { type: number, minimum: 0 }
+        budget_usd: { type: number, minimum: 0 }
+    AgentPolicy:
+      type: object
+      required: [mode]
+      properties:
+        mode: { enum: [allow, deny] }
+        scopes: { type: array, items: { type: string }, description: Allowed action scopes. Absent means all. }
+        rpm: { type: number, description: Requests per minute for this agent. }
+        per_human_budget_usd: { type: number, description: Cap shared by the person and all agents acting for them. }
+        price_per_use_usd: { type: number, description: Metering hook only. abuseguard emits usage; it does not bill. }
+        plan: { type: string, examples: [agent] }
+    AssessRequest:
+      type: object
+      required: [subject]
+      properties:
+        subject: { $ref: '#/components/schemas/Subject' }
+        mode: { enum: [shadow, enforce], description: Overrides the tenant default. Shadow logs and enforces nothing. }
+        context:
+          type: object
+          properties:
+            surface: { enum: [signup, api, content], default: api }
+            endpoint_class: { enum: [expensive, standard, static] }
+            scope: { type: string }
+            plan: { type: string }
+        behavior: { $ref: '#/components/schemas/Behavior' }
+        signals: { type: array, items: { $ref: '#/components/schemas/Signal' } }
+        providers: { type: object, additionalProperties: { enum: [ok, timeout, down] }, description: Health of each configured provider for this request. }
+        cost: { $ref: '#/components/schemas/Cost' }
+        agent_policy: { $ref: '#/components/schemas/AgentPolicy' }
+    Action:
+      type: object
+      required: [type]
+      properties:
+        type: { enum: [step_up, slow, limit, block] }
+        step: { type: string, description: 'Ladder rung: email_confirm, passkey, card_on_file, proof_of_work, human_check, manual_review, agent_registration, agent_pass_bind, human_handoff.' }
+        alternatives: { type: array, items: { type: string }, description: Always contains a non-visual, non-gesture, non-camera path. }
+        mode: { enum: [rate_budget, retry_after, cached] }
+        status: { type: integer }
+        rpm: { type: number }
+        retry_after_s: { type: number }
+        reset: { type: string }
+    Recovery:
+      type: object
+      required: [appeal, paths, sla_hours]
+      properties:
+        appeal: { const: true }
+        paths: { type: array, items: { type: string } }
+        sla_hours: { type: number }
+    Verdict:
+      type: object
+      required: [spec_version, subject, class, decision, enforced, effective_decision, confidence, reasons, scores, action, recovery, cost]
+      properties:
+        decision_id: { type: string }
+        spec_version: { type: string }
+        subject: { oneOf: [{ $ref: '#/components/schemas/Subject' }, { type: 'null' }] }
+        class: { enum: [likely_farm, legitimate_heavy_user, legitimate_user, reseller, delegated_agent, assistive_tool, search_engine, declared_crawler, suspected_scraper, inconclusive] }
+        decision: { enum: [allow, step_up, slow, limit, block] }
+        enforced: { type: boolean }
+        effective_decision: { enum: [allow, step_up, slow, limit, block], description: '`allow` whenever enforced is false.' }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        reasons: { type: array, items: { type: string }, description: Stable reason codes (src/explain.js REASON_TEXT). }
+        scores: { type: object, required: [farm, scraper, legit, cost_ratio], properties: { farm: { type: number }, scraper: { type: number }, legit: { type: number }, cost_ratio: { type: number } } }
+        action: { oneOf: [{ $ref: '#/components/schemas/Action' }, { type: 'null' }] }
+        recovery: { oneOf: [{ $ref: '#/components/schemas/Recovery' }, { type: 'null' }], description: Never null unless decision is allow. }
+        cost: { type: object, required: [attributed_usd, budget_usd], properties: { attributed_usd: { type: number }, budget_usd: { type: number } } }
+    Explanation:
+      type: object
+      properties:
+        headline: { type: string }
+        class: { type: string }
+        confidence: { type: number }
+        enforced: { type: boolean }
+        reasons: { type: array, items: { type: object, properties: { code: { type: string }, text: { type: string } } } }
+        next_steps: { type: array, items: { type: object, properties: { path: { type: string }, text: { type: string } } } }
+        appeal_sla_hours: { type: [number, 'null'] }
+    AppealRequest:
+      type: object
+      properties:
+        channel: { enum: [api, email, support], default: api }
+        note: { type: string, maxLength: 2000 }
+        contact_hash: { type: string }
+    Appeal:
+      type: object
+      properties:
+        id: { type: string }
+        decision_id: { type: string }
+        status: { enum: [open, resolved] }
+        outcome: { enum: [overturned, upheld, null] }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: [string, 'null'], format: date-time }
+    Event:
+      type: object
+      required: [type, subject, ts]
+      properties:
+        type: { enum: [usage, link, signup, conversion] }
+        subject: { $ref: '#/components/schemas/Subject' }
+        ts: { type: string, format: date-time }
+        usage: { type: object, properties: { requests: { type: integer }, cpu_s: { type: number }, bytes: { type: integer }, db_s: { type: number }, direct_usd: { type: number }, endpoint: { type: string } } }
+        link: { type: object, required: [link_type, value_hash], properties: { link_type: { enum: [device, payment, ip, email_domain] }, value_hash: { type: string } } }
+    SubjectState:
+      type: object
+      properties:
+        subject: { $ref: '#/components/schemas/Subject' }
+        clusters: { type: object, additionalProperties: { type: integer } }
+        window: { type: object, properties: { start: { type: string, format: date-time }, requests: { type: integer }, cost_attributed_usd: { type: number }, budget_usd: { type: number } } }
+        converted: { type: boolean, description: Good traffic converted. }
+        last_decision: { oneOf: [{ $ref: '#/components/schemas/Verdict' }, { type: 'null' }] }
+    SignalProvider:
+      type: object
+      required: [name, enabled]
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+        timeout_ms: { type: integer, default: 150 }
+        signal_types: { type: array, items: { type: string } }
+        status: { enum: [ok, timeout, down], readOnly: true }
+    Policy:
+      type: object
+      properties:
+        mode: { enum: [shadow, enforce], default: shadow }
+        budget_usd: { type: number }
+        window_s: { type: integer }
+        budgets: { type: array, items: { type: object, required: [match, budget_usd], properties: { match: { type: object, properties: { plan: { type: string }, endpoint_class: { type: string }, subject_kind: { $ref: '#/components/schemas/SubjectKind' } } }, budget_usd: { type: number } } } }
+        thresholds: { type: object, additionalProperties: { type: number }, description: Overrides for documented AG_* thresholds. }
+        retention_days: { type: integer, default: 90 }
+        cross_tenant_signals: { type: boolean, default: false }
+    AgentPassRequest:
+      type: object
+      required: [subject, agent_id, client_key_thumbprint]
+      properties:
+        subject: { $ref: '#/components/schemas/Subject' }
+        agent_id: { type: string }
+        client_key_thumbprint: { type: string, description: Pass is only valid on requests signed by this key (non-relayable). }
+        scopes: { type: array, items: { type: string } }
+        ttl_s: { type: integer, default: 300, maximum: 900 }
+    AgentPass:
+      type: object
+      properties:
+        id: { type: string }
+        token: { type: string }
+        expires_at: { type: string, format: date-time }
+        scopes: { type: array, items: { type: string } }
+    AuditRequest:
+      type: object
+      required: [source]
+      properties:
+        source: { type: object, required: [url], properties: { url: { type: string, format: uri, description: Pre-signed URL to a log file. }, format: { enum: [auto, clf, jsonl], default: auto } } }
+        disallow: { type: array, items: { type: string }, description: robots.txt Disallow prefixes. }
+        endpoint_costs: { type: array, items: { type: object, required: [prefix, usd], properties: { prefix: { type: string }, usd: { type: number } } } }
+        converted_paths: { type: array, items: { type: string } }
+    Audit:
+      type: object
+      properties:
+        id: { type: string }
+        status: { enum: [queued, running, done, failed] }
+        report:
+          type: object
+          description: Output of src/logAnalyzer.js analyzeLines.
+          properties:
+            lines: { type: integer }
+            skipped: { type: integer }
+            subjects: { type: integer }
+            totals: { type: object, properties: { requests: { type: integer }, bytes: { type: integer }, cost_usd: { type: number } } }
+            by_class: { type: object, additionalProperties: { type: object, properties: { subjects: { type: integer }, requests: { type: integer }, cost_usd: { type: number } } } }
+            by_decision: { type: object, additionalProperties: { type: integer } }
+            estimated_savings_usd: { type: number }
+            good_traffic: { type: object, properties: { subjects_converted: { type: integer }, cost_usd: { type: number } } }
+            top_subjects: { type: array, items: { type: object, additionalProperties: true } }
+    AccuracyReport:
+      type: object
+      properties:
+        window_days: { type: integer }
+        decisions: { type: integer }
+        non_allow: { type: integer }
+        precision: { type: [number, 'null'], description: Labelled abusive among labelled non-allow decisions. Null without labels. }
+        false_positive_rate_paying: { type: [number, 'null'] }
+        appeals: { type: integer }
+        appeals_overturned: { type: integer }
+        median_appeal_hours: { type: [number, 'null'] }
+        cost_attributed_usd: { type: number }
+        saved_usd: { type: number }
+        good_traffic_converted: { type: integer }
+    WebhookEventType: { enum: [decision.created, subject.flagged, appeal.filed, appeal.resolved, budget.threshold, audit.completed] }
+    WebhookEvent:
+      type: object
+      required: [id, type, created_at, data]
+      properties:
+        id: { type: string }
+        type: { $ref: '#/components/schemas/WebhookEventType' }
+        created_at: { type: string, format: date-time }
+        data: { type: object, additionalProperties: true }
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { enum: [ok, degraded] }
+        spec_version: { type: string }

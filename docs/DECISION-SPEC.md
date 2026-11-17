@@ -1,6 +1,6 @@
-# Decision spec 1.1.0
+# Decision spec 1.2.0
 
-Normative together with `contracts/golden-vectors.json` (69 vectors). Where prose and vectors disagree, vectors win. Reference: `src/`. Shapes: `contracts/openapi.yaml`.
+Normative together with `contracts/golden-vectors.json` (75 vectors). Where prose and vectors disagree, vectors win. Reference: `src/`. Shapes: `contracts/openapi.yaml`.
 
 ## 1. Signals
 
@@ -8,7 +8,7 @@ Each signal has type, value, confidence, freshness, provenance. Per type, the mo
 
 - Dropped as stale if older than 86,400 s (`agent.credential`: 300 s). Reason `STALE_SIGNAL_IGNORED`.
 - Dropped if confidence is under 0.3. Reason `LOW_CONFIDENCE_SIGNAL_IGNORED`.
-- No signals at all: reason `NO_EXTERNAL_SIGNALS`; the engine still decides.
+- No signals: `NO_EXTERNAL_SIGNALS`.
 - Any provider not `ok`: reason `PROVIDER_DEGRADED`, confidence capped at 0.7, farm `block` becomes `step_up`.
 
 ## 2. Scores
@@ -47,7 +47,12 @@ A **strong link** is a device or payment cluster of 3 or more, or provider risk 
 |120 or more requests per minute (600 or more)|0.3 (0.5)|HIGH_REQUEST_RATE|
 |robots.txt violations|0.3|ROBOTS_VIOLATION|
 |half or more requests re-fetch unchanged content|0.2|UNCHANGED_REFETCH|
-|120 or more requests per minute and 10% or more error responses (401 and 429 excluded)|0.2|ERROR_RESPONSE_RATIO|
+|120+ requests per minute and 10%+ error responses (not 401, 429)|0.2|ERROR_RESPONSE_RATIO|
+|browser user-agent, 20+ pages, under 2% assets|0.3|BROWSER_WITHOUT_ASSETS|
+|half or more requests walk numbered paths|0.2|PATH_ENUMERATION|
+|1,000+ pages, machine-regular gaps|0.2|EVEN_SPACING|
+|1,000+ pages, active 85% of hours over a day|0.15|ROUND_THE_CLOCK|
+|trap link or marker record opened|0.5|TRAP_LINK|
 |proxy network: residential 0.2, other 0.15|x confidence|PROXY_NETWORK|
 |HTTP library or empty user agent|0.1|NON_BROWSER_CLIENT|
 
@@ -82,7 +87,7 @@ Added to the brief's classes: `legitimate_user`, `declared_crawler`.
 
 Every non-allow verdict carries `recovery` with `appeal: true`, paths and an SLA (default 24 h). `inconclusive` can only allow or step up.
 
-Applied after classification; class and scores do not change (what triggers them: ACTIONS.md):
+After classification (triggers: ACTIONS.md):
 
 - `standing.trusted`: step-up, slow and block become allow (`OPERATOR_TRUSTED`). Limits still apply.
 - `standing.appeal_open`: block becomes step-up (`APPEAL_OPEN`).
@@ -94,15 +99,11 @@ Applied after classification; class and scores do not change (what triggers them
 - `shadow` (default): the real decision is returned and stored, `enforced: false`, `effective_decision: allow`.
 - Client fallback when the engine is unreachable: allow with `ENGINE_UNAVAILABLE`; in fail-closed mode a step-up with `manual_review`. Never a block.
 
-## 7. Confidence
+## 7. Configuration and versioning
 
-The winning score, the verifying signal's confidence, or a fixed value for rule-based classes. It ranks verdicts; it is not a calibrated probability.
+Every threshold is an `AG_*` variable (`loadConfig`). Golden vectors assume defaults. Reason codes are append-only; a changed vector outcome is a major version. 1.1.0 added error-ratio evidence, standing and settings; 1.2.0 added pattern and timing evidence.
 
-## 8. Configuration and versioning
+## 8. Known limits
 
-Every threshold is an `AG_*` variable (`loadConfig`). Golden vectors assume defaults. Reason codes are append-only; a changed vector outcome is a major version. 1.1.0 added the error-ratio evidence, standing and settings.
-
-## 9. Known limits
-
-- Linking quality bounds everything. A farm with distinct devices, no shared card and no provider signal scores as individual users; only the budget limit applies.
-- Weights are judgement.
+- Linking quality bounds everything. Unlinked farm members score as individual users; only the budget limit applies.
+- Weights are judgement. Confidence ranks verdicts; it is not a probability.

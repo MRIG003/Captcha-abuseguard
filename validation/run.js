@@ -9,6 +9,7 @@ const DIR = new URL('./data/', import.meta.url);
 const RAW = 'https://raw.githubusercontent.com';
 export const SOURCES = {
   'nginx_logs': `${RAW}/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs`,
+  'apache_logs': `${RAW}/elastic/examples/master/Common%20Data%20Formats/apache_logs/apache_logs`,
   'crawlers.json': `${RAW}/monperrus/crawler-user-agents/master/crawler-user-agents.json`,
   'browsers.json': `${RAW}/microlinkhq/top-user-agents/master/src/index.json`,
   'ai-robots.json': `${RAW}/ai-robots-txt/ai.robots.txt/main/robots.json`,
@@ -30,6 +31,7 @@ async function load(name) {
   }
   return readFileSync(file, 'utf8');
 }
+const NEW_SIGNALS = ['ERROR_RESPONSE_RATIO', 'BROWSER_WITHOUT_ASSETS', 'EVEN_SPACING', 'PATH_ENUMERATION', 'ROUND_THE_CLOCK', 'TRAP_LINK'];
 const pct = (num, den) => (den ? Math.round((num / den) * 10000) / 100 : null);
 const round = (x, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
 const quantile = (sorted, q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
@@ -61,8 +63,8 @@ async function e1() {
 // ---------------------------------------------------------------------------------------------------------------
 // E2. Real nginx traffic (Elastic example logs, May-June 2015, a package download server). No ground truth:
 // the public crawler list gives a weak label for declared crawlers.
-async function e2() {
-  const lines = (await load('nginx_logs')).split('\n').filter(Boolean);
+async function e2(file = 'nginx_logs') {
+  const lines = (await load(file)).split('\n').filter(Boolean);
   const crawlerRe = JSON.parse(await load('crawlers.json')).map((c) => { try { return new RegExp(c.pattern, 'i'); } catch { return null; } }).filter(Boolean);
   const isListed = (ua) => crawlerRe.some((re) => re.test(ua));
   const t0 = performance.now();
@@ -74,15 +76,17 @@ async function e2() {
   const groups = {};
   for (const row of report.top_subjects) {
     const ua = uaBySubject.get(row.subject) ?? '', klass = uaClass(ua);
-    const group = isListed(ua) ? 'listed_crawler' : klass === 'browser' ? 'browser_ua' : /apt-http|urlgrabber|yum|chef|libwww|wget|curl/i.test(ua) ? 'package_or_cli_client' : 'other_automation';
+    const group = isListed(ua) ? 'listed_crawler' : klass === 'browser' ? 'browser_ua' : klass === 'declared_bot' ? 'other_declared_bot' : /apt-http|urlgrabber|yum|chef|libwww|wget|curl/i.test(ua) ? 'package_or_cli_client' : 'other_automation';
     const g = (groups[group] ??= { subjects: 0, requests: 0, allow: 0, step_up: 0, slow: 0, limit: 0, block: 0 });
     g.subjects++; g.requests += row.requests; g[row.decision]++;
   }
   for (const g of Object.values(groups)) g.not_allowed_pct = pct(g.subjects - g.allow, g.subjects);
   const flagged = report.top_subjects.filter((r) => r.decision !== 'allow').slice(0, 8)
     .map((r) => ({ ua: (uaBySubject.get(r.subject) ?? '').slice(0, 60), class: r.class, decision: r.decision, requests: r.requests, peak_rpm: r.peak_rpm, reasons: r.reasons.slice(0, 4) }));
+  const fired = {};
+  for (const row of report.top_subjects) for (const code of row.reasons) if (NEW_SIGNALS.includes(code)) fired[code] = (fired[code] ?? 0) + 1;
   return { lines: report.lines, skipped: report.skipped, subjects: report.subjects, window: report.window, analyse_ms: Math.round(ms),
-    by_class: report.by_class, by_decision: report.by_decision, groups, examples_not_allowed: flagged };
+    by_class: report.by_class, by_decision: report.by_decision, groups, new_signals_fired_on_subjects: fired, examples_not_allowed: flagged };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -100,7 +104,7 @@ async function e3() {
     scanners[tool] = { lines: report.lines, skipped: report.skipped, subjects: report.subjects,
       requests_from_flagged_subjects_pct: pct(caught.reduce((a, r) => a + r.requests, 0), report.lines - report.skipped),
       error_status_pct: pct(errors.filter((e) => e.status >= 400).length, errors.length),
-      subjects_detail: report.top_subjects.slice(0, 4).map((r) => ({ class: r.class, decision: r.decision, requests: r.requests, peak_rpm: r.peak_rpm, reasons: r.reasons.slice(0, 4) })) };
+      subjects_detail: report.top_subjects.slice(0, 4).map((r) => ({ class: r.class, decision: r.decision, requests: r.requests, peak_rpm: r.peak_rpm, reasons: r.reasons.filter((c) => c !== 'NO_EXTERNAL_SIGNALS') })) };
     // Give each scanner a distinct source address so it cannot collide with a real client in the mixed set.
     for (const line of lines) mixed.push({ line: line.replace(/^\S+/, `scanner-${tool}`), abusive: true });
   }
@@ -182,6 +186,6 @@ async function e4() {
 }
 
 const results = { generated_at: new Date().toISOString(), engine_defaults: { rpmHigh: DEFAULT_CONFIG.rpmHigh, scraperSlow: DEFAULT_CONFIG.scraperSlow, budgetUsd: DEFAULT_CONFIG.budgetUsd },
-  e1_user_agent_classification: await e1(), e2_real_nginx_traffic: await e2(), e3_labelled_scanners: await e3(), e4_llm_cost_traces: await e4() };
+  e1_user_agent_classification: await e1(), e2_real_nginx_traffic: await e2(), e2b_real_website_traffic: await e2('apache_logs'), e3_labelled_scanners: await e3(), e4_llm_cost_traces: await e4() };
 writeFileSync(new URL('./results.json', import.meta.url), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 1));

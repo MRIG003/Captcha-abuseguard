@@ -40,6 +40,8 @@ export function uaClass(ua) {
   return BROWSER_UA.test(ua) ? 'browser' : 'library';
 }
 
+const ASSET = /\.(css|js|mjs|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|map)(\?|$)/i;
+
 const savedUsd = (verdict, sub, cfg) => {
   if (verdict.decision === 'block') return sub.cost;
   if (verdict.decision === 'limit') return Math.max(0, sub.cost - cfg.budgetUsd);
@@ -55,7 +57,7 @@ const savedUsd = (verdict, sub, cfg) => {
  */
 export function analyzeLines(lines, opts = {}) {
   const cfg = { ...DEFAULT_CONFIG, ...(opts.config ?? {}) };
-  const { salt = 'audit', disallow = [], endpointCosts = [], convertedPaths = [] } = opts;
+  const { salt = 'audit', disallow = [], endpointCosts = [], convertedPaths = [], trapPaths = [] } = opts;
   const subs = new Map();
   let total = 0, skipped = 0, from = Infinity, to = -Infinity;
   for (const line of lines) {
@@ -67,7 +69,8 @@ export function analyzeLines(lines, opts = {}) {
     let s = subs.get(id);
     if (!s) {
       s = { kind: e.key ? 'api_key' : 'session', id, ua: uaClass(e.ua), verified: opts.verifyBot?.(e.ip, e.ua) ?? null,
-        requests: 0, bytes: 0, cost: 0, minutes: new Map(), seen: new Set(), repeats: 0, robots: 0, errors: 0, converted: false, rpm: 0 };
+        requests: 0, bytes: 0, cost: 0, minutes: new Map(), seen: new Set(), repeats: 0, robots: 0, errors: 0, converted: false, rpm: 0,
+        assets: 0, traps: 0, seq: 0, lastNum: NaN, lastTs: NaN, gapSum: 0, gapSq: 0, hours: new Set(), first: e.ts, last: e.ts };
       subs.set(id, s);
     }
     s.requests++; s.bytes += e.bytes;
@@ -80,6 +83,13 @@ export function analyzeLines(lines, opts = {}) {
     if (disallow.some((p) => e.path.startsWith(p))) s.robots++;
     if (e.status >= 400 && e.status !== 401 && e.status !== 429) s.errors++; // 401 and 429 are our own or auth replies
     if (convertedPaths.some((p) => e.path.startsWith(p))) s.converted = true;
+    if (trapPaths.some((p) => e.path.startsWith(p))) s.traps++;
+    if (ASSET.test(e.path)) s.assets++;
+    const num = Number(/(\d+)\D*$/.exec(e.path.split('?')[0])?.[1]);
+    if (num === s.lastNum + 1) s.seq++;
+    s.lastNum = num;
+    if (!Number.isNaN(s.lastTs)) { const gap = Math.abs(e.ts - s.lastTs) / 1000; s.gapSum += gap; s.gapSq += gap * gap; }
+    s.lastTs = e.ts; s.hours.add(Math.floor(e.ts / 3600000)); s.first = Math.min(s.first, e.ts); s.last = Math.max(s.last, e.ts);
   }
 
   const report = {
@@ -88,12 +98,23 @@ export function analyzeLines(lines, opts = {}) {
     estimated_savings_usd: 0, good_traffic: { subjects_converted: 0, cost_usd: 0 }, top_subjects: [],
   };
   const rows = [];
+  // On a site that serves almost no images, styles or scripts, "loads no assets" says nothing about the client.
+  let assetsAll = 0;
+  for (const s of subs.values()) assetsAll += s.assets;
+  const siteHasAssets = assetsAll / Math.max(1, total - skipped) >= 0.01;
   for (const s of subs.values()) {
+    // Derived pattern features. Each needs enough requests to mean anything; otherwise it is left out.
+    const n = s.requests, gaps = n - 1, mean = gaps > 0 ? s.gapSum / gaps : 0, spanH = (s.last - s.first) / 3600000;
+    const pattern = n < 30 ? {} : {
+      ...(siteHasAssets ? { asset_ratio: s.assets / n } : {}), page_requests: n - s.assets, sequential_ratio: s.seq / n,
+      ...(mean >= 1 ? { interval_cv: Math.sqrt(Math.max(0, s.gapSq / gaps - mean * mean)) / mean } : {}),
+      ...(spanH >= 24 ? { active_hours_ratio: s.hours.size / Math.ceil(spanH + 1) } : {}),
+    };
     const verdict = decide({
       subject: { kind: s.kind, id: s.id }, mode: 'shadow',
       context: { surface: s.kind === 'api_key' ? 'api' : 'content' },
       behavior: { rpm: s.rpm, robots_violations: s.robots, refetch_unchanged: s.requests >= 20 ? s.repeats / s.requests : 0,
-        error_ratio: s.requests >= 20 ? s.errors / s.requests : 0, ua: s.ua },
+        error_ratio: s.requests >= 20 ? s.errors / s.requests : 0, ua: s.ua, trap_hits: s.traps, ...pattern },
       signals: s.verified ? [{ type: 'bot.verified', value: s.verified, confidence: 0.95, freshness_s: 0, provenance: 'log_audit.verify_bot' }] : [],
       cost: { usd: s.cost, budget_usd: cfg.budgetUsd },
     }, cfg);

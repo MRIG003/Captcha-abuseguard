@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17T07:06:03.495Z",
+  "generated_at": "2026-11-17T07:25:07.730Z",
   "engine_defaults": {
     "rpmHigh": 120,
     "scraperSlow": 0.6,
@@ -44,7 +44,7 @@
       "from": "2015-05-17T08:05:00.000Z",
       "to": "2015-06-04T07:06:52.000Z"
     },
-    "analyse_ms": 256,
+    "analyse_ms": 396,
     "by_class": {
       "legitimate_user": {
         "subjects": 2499,
@@ -61,10 +61,10 @@
       "allow": 2797
     },
     "groups": {
-      "package_or_cli_client": {
-        "subjects": 2594,
-        "requests": 50086,
-        "allow": 2594,
+      "other_declared_bot": {
+        "subjects": 297,
+        "requests": 972,
+        "allow": 297,
         "step_up": 0,
         "slow": 0,
         "limit": 0,
@@ -91,10 +91,20 @@
         "block": 0,
         "not_allowed_pct": 0
       },
+      "package_or_cli_client": {
+        "subjects": 2300,
+        "requests": 49117,
+        "allow": 2300,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      },
       "other_automation": {
-        "subjects": 67,
-        "requests": 581,
-        "allow": 67,
+        "subjects": 64,
+        "requests": 578,
+        "allow": 64,
         "step_up": 0,
         "slow": 0,
         "limit": 0,
@@ -102,7 +112,108 @@
         "not_allowed_pct": 0
       }
     },
+    "new_signals_fired_on_subjects": {},
     "examples_not_allowed": []
+  },
+  "e2b_real_website_traffic": {
+    "lines": 10000,
+    "skipped": 0,
+    "subjects": 1862,
+    "window": {
+      "from": "2015-05-17T10:05:00.000Z",
+      "to": "2015-05-20T21:05:59.000Z"
+    },
+    "analyse_ms": 73,
+    "by_class": {
+      "legitimate_user": {
+        "subjects": 1503,
+        "requests": 7549,
+        "cost_usd": 0.18851302336000011
+      },
+      "declared_crawler": {
+        "subjects": 356,
+        "requests": 2383,
+        "cost_usd": 0.031208755199999983
+      },
+      "inconclusive": {
+        "subjects": 3,
+        "requests": 68,
+        "cost_usd": 0.00006084064000000004
+      }
+    },
+    "by_decision": {
+      "allow": 1861,
+      "step_up": 1
+    },
+    "groups": {
+      "listed_crawler": {
+        "subjects": 336,
+        "requests": 2137,
+        "allow": 336,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      },
+      "browser_ua": {
+        "subjects": 1314,
+        "requests": 6781,
+        "allow": 1313,
+        "step_up": 1,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0.08
+      },
+      "other_automation": {
+        "subjects": 162,
+        "requests": 584,
+        "allow": 162,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      },
+      "other_declared_bot": {
+        "subjects": 49,
+        "requests": 497,
+        "allow": 49,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      },
+      "package_or_cli_client": {
+        "subjects": 1,
+        "requests": 1,
+        "allow": 1,
+        "step_up": 0,
+        "slow": 0,
+        "limit": 0,
+        "block": 0,
+        "not_allowed_pct": 0
+      }
+    },
+    "new_signals_fired_on_subjects": {
+      "BROWSER_WITHOUT_ASSETS": 3
+    },
+    "examples_not_allowed": [
+      {
+        "ua": "Mozilla/5.0 (Windows; U; Windows NT 5.2; en-US; rv:1.8.1.4) ",
+        "class": "inconclusive",
+        "decision": "step_up",
+        "requests": 65,
+        "peak_rpm": 10,
+        "reasons": [
+          "UNCHANGED_REFETCH",
+          "BROWSER_WITHOUT_ASSETS",
+          "NO_EXTERNAL_SIGNALS"
+        ]
+      }
+    ]
   },
   "e3_labelled_scanners": {
     "scanners": {
@@ -121,8 +232,7 @@
             "reasons": [
               "HIGH_REQUEST_RATE",
               "UNCHANGED_REFETCH",
-              "ERROR_RESPONSE_RATIO",
-              "NO_EXTERNAL_SIGNALS"
+              "ERROR_RESPONSE_RATIO"
             ]
           },
           {
@@ -131,8 +241,7 @@
             "requests": 6,
             "peak_rpm": 6,
             "reasons": [
-              "NON_BROWSER_CLIENT",
-              "NO_EXTERNAL_SIGNALS"
+              "NON_BROWSER_CLIENT"
             ]
           },
           {
@@ -140,9 +249,7 @@
             "decision": "allow",
             "requests": 2,
             "peak_rpm": 2,
-            "reasons": [
-              "NO_EXTERNAL_SIGNALS"
-            ]
+            "reasons": []
           }
         ]
       },
@@ -161,7 +268,7 @@
             "reasons": [
               "HIGH_REQUEST_RATE",
               "ERROR_RESPONSE_RATIO",
-              "NO_EXTERNAL_SIGNALS"
+              "BROWSER_WITHOUT_ASSETS"
             ]
           },
           {
@@ -171,8 +278,7 @@
             "peak_rpm": 92,
             "reasons": [
               "UNCHANGED_REFETCH",
-              "NON_BROWSER_CLIENT",
-              "NO_EXTERNAL_SIGNALS"
+              "NON_BROWSER_CLIENT"
             ]
           }
         ]
@@ -202,8 +308,7 @@
             "requests": 50,
             "peak_rpm": 17,
             "reasons": [
-              "UNCHANGED_REFETCH",
-              "NO_EXTERNAL_SIGNALS"
+              "UNCHANGED_REFETCH"
             ]
           },
           {
@@ -211,9 +316,7 @@
             "decision": "allow",
             "requests": 20,
             "peak_rpm": 16,
-            "reasons": [
-              "NO_EXTERNAL_SIGNALS"
-            ]
+            "reasons": []
           },
           {
             "class": "legitimate_user",
@@ -222,8 +325,7 @@
             "peak_rpm": 31,
             "reasons": [
               "UNCHANGED_REFETCH",
-              "NON_BROWSER_CLIENT",
-              "NO_EXTERNAL_SIGNALS"
+              "NON_BROWSER_CLIENT"
             ]
           }
         ]

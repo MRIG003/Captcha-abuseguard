@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: abuseguard API
-  version: 1.1.0
+  version: 1.2.0
   summary: Traffic referee. Per-human cost budgets, explainable verdicts, governed agent lane, log audit.
   description: |
     Versioning: the path carries the major version (/v1). Every response carries `AG-Spec-Version`
@@ -324,6 +324,12 @@ components:
         rpm: { type: number, description: Peak requests per minute. }
         robots_violations: { type: integer }
         refetch_unchanged: { type: number, minimum: 0, maximum: 1 }
+        asset_ratio: { type: number, description: Share of requests for images, styles and scripts. }
+        page_requests: { type: integer }
+        sequential_ratio: { type: number, description: Share of requests that walk numbered paths in order. }
+        interval_cv: { type: number, description: Variation of gaps between requests; near 0 is machine-regular. }
+        active_hours_ratio: { type: number }
+        trap_hits: { type: integer }
         error_ratio: { type: number, minimum: 0, maximum: 1, description: Share of responses with status 400 or above, excluding 401 and 429. }
         key_fanout: { type: integer, description: Distinct client networks using one API key. }
         ua: { enum: [browser, library, declared_bot, declared_agent, empty] }
@@ -453,7 +459,7 @@ components:
     Policy:
       type: object
       properties:
-        preset: { enum: [ai_app, online_store, ticketing, publisher, rewards_app], description: Starting values; other fields override it. }
+        preset: { enum: [ai_app, online_store, ticketing, publisher, rewards_app, scraper_blocking, anti_spying, attack_defence, general], description: Starting values; other fields override it. }
         strictness: { enum: [watch, gentle, strict], description: 'watch records only; gentle enforces but never blocks; strict enforces everything.' }
         allowed_actions: { type: array, items: { enum: [step_up, slow, limit, block] } }
         step_up_order: { type: array, items: { type: string } }

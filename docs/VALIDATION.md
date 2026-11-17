@@ -1,7 +1,7 @@
 # Validation on public data
 
-Run on 2026-11-17 with default thresholds. First run: spec 1.0.0. Re-run after adding the error-ratio signal: spec 1.1.0.
-Figures below are from the re-run; where the two runs differ, both are shown.
+Run on 2026-11-17 with default thresholds. Three runs: spec 1.0.0, 1.1.0 (error-ratio signal) and 1.2.0 (pattern and
+timing signals). Figures below are from the latest run; where runs differ, both are shown.
 
 ```bash
 node validation/run.js
@@ -16,7 +16,7 @@ section).
 | Use case | Public data used | Result | How much it proves |
 |---|---|---|---|
 | Telling declared crawlers from browsers | 2,125 real crawler user-agents; 100 current browser user-agents | 96.9% of crawlers recognised as automation, 3.1% mistaken for a browser; 100% of browsers recognised | Solid for declared identity. Says nothing about bots that fake a browser string |
-| Not flagging ordinary traffic | 51,462 real nginx requests, 2,797 clients | 0 clients flagged | Weak: one low-traffic download site from 2015, no ground truth |
+| Not flagging ordinary traffic | 51,462 real nginx requests (2,797 clients) and 10,000 real website requests (1,862 clients) | 0 and 1 clients flagged | Weak to moderate: two small sites from 2015, no ground truth |
 | Catching aggressive automation | 17,849 labelled vulnerability-scanner requests, alone and mixed into the real traffic | 98.0% of scanner requests came from flagged clients; 100% of flagged requests were scanner requests; all three tools are now slowed | Moderate: three tools, one lab network |
 | Per-human budget vs per-key budget | Real LLM request sizes (Azure, BurstGPT) with invented identities | Per-key budget caught 0-3.7% of farm cost; cluster budget caught 100% | Arithmetic only: the device links were given, not detected |
 | Detecting multi-account farms | none reachable | not tested | Nothing |
@@ -56,6 +56,25 @@ manager does. That is the intended behaviour: unchanged re-fetching alone is not
 
 Limits: there are no labels, request rates are low, and the site is not representative of a web application. This
 is a check that the engine does not misfire on quiet legitimate automation, not a false-positive rate.
+
+## E2b. Real website traffic with browsers
+
+Source: `elastic/examples` Apache logs, a personal website, May 2015: 10,000 requests, 1,862 clients, mostly real
+browsers. Added to check the 1.2.0 signals, which look at how a browser behaves.
+
+| Group (by user-agent) | Clients | Requests | Flagged |
+|---|---|---|---|
+| Browsers | 1,314 | 6,781 | 1 (0.08%) |
+| Listed crawlers | 336 | 2,137 | 0 |
+| Other automation and declared bots | 212 | 1,082 | 0 |
+
+- The "says browser, loads no assets" signal fired on 3 of 1,314 browser clients (0.2%). Two were left alone.
+- The one flagged client sent 65 requests with a 2007 Firefox user-agent, loaded no assets and kept re-fetching
+  unchanged pages. It was asked for a proof-of-work step. It is probably a feed fetcher; there is no label to confirm.
+- On the download server in E2, which serves no page assets at all, that signal is switched off automatically;
+  without that rule one client there was flagged. That rule was added after seeing the result.
+- Enumeration, even spacing, round-the-clock and trap links did not fire on either real site. They are covered
+  by tests only, not by public data.
 
 ## E3. Labelled scanners
 

@@ -24,13 +24,13 @@ Team assumption: 2 engineers, 3 months to MVP.
 
 | Area | State |
 |------|-------|
-| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 746 lines) |
+| Scoring core, decision engine, explainer, log analyzer, memory store | Built, tested (`src/`, 777 lines) |
 | Postgres store adapter | Passes the adapter contract on a live PostgreSQL 16 (`test/store.pg.test.js`) |
 | HTTP service | Built, tested (`service/app.js`, `test/service.test.js`); also smoke-tested on Postgres |
 | Node SDK | Built (`sdk/node/`); passes the conformance suite as `AG_CONFORMANCE_CLIENT` |
 | Audit CLI | Built (`scripts/audit.js`) |
 | Dockerfile, compose | Written, **never built or run** |
-| Golden vectors | 69, all passing (`contracts/golden-vectors.json`) |
+| Golden vectors | 75, all passing (`contracts/golden-vectors.json`) |
 | Proof tests | 8, passing on synthetic data (`test/proof.test.js`) |
 | Conformance suite | 7 tests against a mock server and reference client (`test/conformance/`) |
 | Edge adapters, signal and credential adapters, webhooks, other SDKs | Not built: `docs/BACKLOG.md` |
@@ -48,6 +48,7 @@ Team assumption: 2 engineers, 3 months to MVP.
 | `docs/BACKLOG.md` | Ordered tasks T00-T15 |
 | `docs/MANUAL-OUTLINE.md` | Outline of user documentation |
 | `docs/ANALYSIS.md` | Substitutes, risks, market size, kill criteria |
+| `docs/SCORECARD.md` | Status and measurement for every layer, action, setting, pack and connection; next steps |
 | `docs/ACTIONS.md` | What happens after a flag, settings, presets (`service/presets.js`) |
 | `docs/VALIDATION.md` | Results on public datasets (`validation/run.js`), and what could not be validated |
 | `contracts/` | `openapi.yaml`, `schema.sql`, `golden-vectors.json`, `CONFORMANCE.md` |

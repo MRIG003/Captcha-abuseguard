@@ -5,7 +5,7 @@
  */
 import { createHmac } from 'node:crypto';
 
-const SPEC_VERSION = '1.1.0';
+const SPEC_VERSION = '1.2.0';
 
 /** Same output as the core `hashId`: first 32 hex chars of HMAC-SHA256(salt, raw). */
 export const hashId = (salt, raw) => createHmac('sha256', String(salt)).update(String(raw)).digest('hex').slice(0, 32);

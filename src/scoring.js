@@ -2,7 +2,7 @@
 /** Scoring core: config, signal normalisation, evidence scores, cost attribution. Zero dependencies. */
 import { createHmac } from 'node:crypto';
 
-export const SPEC_VERSION = '1.1.0';
+export const SPEC_VERSION = '1.2.0';
 export const CLASSES = ['likely_farm', 'legitimate_heavy_user', 'legitimate_user', 'reseller', 'delegated_agent',
   'assistive_tool', 'search_engine', 'declared_crawler', 'suspected_scraper', 'inconclusive'];
 export const DECISIONS = ['allow', 'step_up', 'slow', 'limit', 'block'];
@@ -102,6 +102,11 @@ export function score(input, cfg = DEFAULT_CONFIG) {
     scraper += add((b.refetch_unchanged ?? 0) >= 0.5, 'UNCHANGED_REFETCH', 0.2);
     // Fast and failing: probing for pages that do not exist. Counted only together with a high request rate.
     scraper += add(rpm >= cfg.rpmHigh && (b.error_ratio ?? 0) >= cfg.errorRatio, 'ERROR_RESPONSE_RATIO', 0.2);
+    // Pattern, frequency and time-window evidence (computed from logs or supplied by the caller).
+    scraper += add(b.ua === 'browser' && (b.page_requests ?? 0) >= 20 && (b.asset_ratio ?? 1) < 0.02, 'BROWSER_WITHOUT_ASSETS', 0.3);
+    const bulk = (b.page_requests ?? 0) >= 1000; // regular timing only counts at volume: hourly pollers are normal
+    scraper += add(bulk && (b.interval_cv ?? 1) < 0.1, 'EVEN_SPACING', 0.2) + add((b.sequential_ratio ?? 0) >= 0.5, 'PATH_ENUMERATION', 0.2);
+    scraper += add(bulk && (b.active_hours_ratio ?? 0) >= 0.85, 'ROUND_THE_CLOCK', 0.15) + add((b.trap_hits ?? 0) > 0, 'TRAP_LINK', 0.5);
     scraper += add(!!proxy, 'PROXY_NETWORK', (proxy?.value === 'residential' ? 0.2 : 0.15) * (proxy?.confidence ?? 0));
     scraper += add(b.ua === 'library' || b.ua === 'empty', 'NON_BROWSER_CLIENT', 0.1);
     scraper = clamp(scraper - 0.5 * legit);

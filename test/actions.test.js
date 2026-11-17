@@ -107,7 +107,7 @@ test('webhook targets must be public https unless private targets are explicitly
 
 test('presets: one core, different settings per business', async () => {
   const presets = (await call('GET', '/v1/presets')).body;
-  assert.deepEqual(Object.keys(presets), ['ai_app', 'online_store', 'ticketing', 'publisher', 'rewards_app']);
+  assert.deepEqual(Object.keys(presets).sort(), ['ai_app', 'anti_spying', 'attack_defence', 'general', 'online_store', 'publisher', 'rewards_app', 'scraper_blocking', 'ticketing']);
   for (const p of Object.values(presets)) assert.equal(p.strictness, 'watch', 'every preset starts in watch-only mode');
   assert.equal((await call('PUT', '/v1/policy', { preset: 'casino' }, 'key-t')).status, 400);
 
@@ -130,6 +130,17 @@ test('presets: one core, different settings per business', async () => {
   const shopFarm = (await call('POST', '/v1/decisions', { subject: acct('s-farm'), behavior: farm }, 'key-s')).body;
   assert.deepEqual([shopFarm.decision, shopFarm.reasons.includes('ACTION_NOT_PERMITTED')], ['step_up', true]);
   assert.equal((await call('PUT', '/v1/policy', { allowed_actions: ['delete'] }, 'key-s')).status, 400);
+
+  // Anti-spying: "ask to log in" is the first check, and the scraper threshold is lower than the default.
+  await call('PUT', '/v1/policy', { preset: 'anti_spying', strictness: 'strict', allowed_actions: ['step_up', 'slow', 'limit'] }, 'key-s');
+  const watcher = { subject: { kind: 'session', id: 'spy-1' }, context: { surface: 'content' }, behavior: { rpm: 130, ua: 'library' } };
+  const spy = (await call('POST', '/v1/decisions', watcher, 'key-s')).body;
+  assert.deepEqual([spy.class, spy.decision, spy.action.step], ['inconclusive', 'step_up', 'proof_of_work']);
+  const hot = (await call('POST', '/v1/decisions', { ...watcher, behavior: { rpm: 130, ua: 'library', sequential_ratio: 0.8 } }, 'key-s')).body;
+  assert.deepEqual([hot.class, hot.decision], ['suspected_scraper', 'slow'], 'lower threshold in this pack: 0.6 would be needed by default, 0.5 here');
+  await call('PUT', '/v1/policy', { preset: 'ticketing', strictness: 'strict', step_up_order: ['login', 'human_check'] }, 'key-s');
+  const queue = (await call('POST', '/v1/decisions', { subject: acct('q1'), behavior: { device_cluster: 5, disposable_email: true } }, 'key-s')).body;
+  assert.deepEqual([queue.action.step, queue.action.alternatives], ['login', ['human_check', 'manual_review']], 'ask-to-log-in is a rung a company can put first');
 });
 
 test('SDK enforces a slow verdict with a rate budget and reports step-ups to a hook', async () => {

@@ -60,3 +60,21 @@ test('loadConfig reads env vars and falls back to defaults', () => {
   assert.deepEqual([cfg.mode, cfg.budgetUsd, cfg.farmBlock, cfg.failMode], ['enforce', 12.5, 0.85, 'closed']);
   assert.equal(loadConfig().mode, 'shadow');
 });
+
+test('pattern features: trap links, enumeration and a browser that loads no assets', () => {
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  const at = (i) => { const d = new Date(Date.UTC(2026, 10, 1, 12, 0, 0) + i * 3000); return `${String(d.getUTCDate()).padStart(2, '0')}/Nov/2026:${d.toISOString().slice(11, 19)} +0000`; };
+  const lines = [];
+  for (let i = 0; i < 300; i++) lines.push(`203.0.113.50 - - [${at(i)}] "GET /listing/${1000 + i} HTTP/1.1" 200 9000 "-" "${ua}"`);
+  lines.push(`203.0.113.50 - - [${at(300)}] "GET /listing/marker-7f3a HTTP/1.1" 200 9000 "-" "${ua}"`);
+  for (let i = 0; i < 40; i++) { // a real reader on the same site: pages plus their assets
+    lines.push(`198.51.100.9 - - [${at(i * 7)}] "GET /listing/${5000 + i * 13} HTTP/1.1" 200 9000 "-" "${ua}"`);
+    lines.push(`198.51.100.9 - - [${at(i * 7)}] "GET /static/app.css HTTP/1.1" 200 3000 "-" "${ua}"`);
+    lines.push(`198.51.100.9 - - [${at(i * 7)}] "GET /img/photo-${i}.jpg HTTP/1.1" 200 50000 "-" "${ua}"`);
+  }
+  const report = analyzeLines(lines, { trapPaths: ['/listing/marker-'], top: 5 });
+  const scraper = report.top_subjects.find((r) => r.requests === 301), reader = report.top_subjects.find((r) => r.requests === 120);
+  assert.deepEqual([scraper.class, scraper.decision], ['suspected_scraper', 'slow']);
+  for (const code of ['TRAP_LINK', 'PATH_ENUMERATION', 'BROWSER_WITHOUT_ASSETS']) assert.ok(scraper.reasons.includes(code), code);
+  assert.deepEqual([reader.class, reader.decision], ['legitimate_user', 'allow']);
+});

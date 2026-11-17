@@ -55,7 +55,8 @@ anyone. Those stay with the company and can be triggered from the webhook.
 ## Presets
 
 `GET /v1/presets` lists them; `PUT /v1/policy {"preset": "ticketing"}` applies one. All start in watch mode. The
-numbers are starting points, not tuned values.
+numbers are starting points, not tuned values. Four job-based packs were added from the plan document
+(`scraper_blocking`, `anti_spying`, `attack_defence`, `general`); see `service/presets.js`.
 
 | Preset | Protects | Fair share counted in | First check | Actions allowed | Agents |
 |---|---|---|---|---|---|
@@ -69,8 +70,8 @@ numbers are starting points, not tuned values.
 
 - The live check is a slot (`human.liveness` signal and the `human_check` rung). No live check is built into
   this repository; the prototype mentioned in planning is not part of it.
-- "Charge" and "ask to log in" are not actions yet. Charging needs a billing integration; login is the
-  company's own step-up.
+- "Charge" is not an action yet; it needs a billing integration. "Ask to log in" is a rung a company can place
+  first with `step_up_order: ["login", ...]`; the login itself is the company's.
 - Enforcement lives in the Node SDK only. Other languages and edge workers must port the same mapping.
 - The rate budget is per process. Behind several servers each keeps its own bucket.
 - Webhook delivery is best effort (three attempts) and is not stored for replay. Private and non-HTTPS targets

@@ -1,0 +1,16 @@
+{
+  "name": "abuseguard",
+  "version": "0.1.0",
+  "description": "Traffic referee reference core: per-human cost budgets, explainable verdicts, log audit.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "exports": { ".": "./src/index.js" },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "demo": "node scripts/demo.js"
+  },
+  "peerDependencies": { "pg": ">=8" },
+  "peerDependenciesMeta": { "pg": { "optional": true } }
+}
